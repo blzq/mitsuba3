@@ -117,13 +117,12 @@ public:
         Float cos_theta_i = Frame3f::cos_theta(si.wi);
         BSDFSample3f bs = dr::zeros<BSDFSample3f>();
         
-        // Ignoring perfectly grazing incoming rays
         active &= cos_theta_i > 0.f;
 
         if (unlikely((!has_diffuse && !has_fluoro) || dr::none_or<false>(active)))
             return { bs, 0.f };
 
-        Float prob_diffuse = 0.0; // si.wavelengths[0] * m_excitation->eval(si, active);
+        Float prob_diffuse = 0.5f; //TODO
         Mask sample_diffuse = active && sample1 < prob_diffuse;
         Mask sample_fluoro = active && !sample_diffuse;
         
@@ -135,13 +134,11 @@ public:
             dr::masked(bs.sampled_component, sample_diffuse) = 0;
             dr::masked(bs.sampled_type, sample_diffuse) =
                     +BSDFFlags::DiffuseReflection;
-            active &= !sample_diffuse;
         }
         if (dr::any_or<true>(sample_fluoro)) {
             dr::masked(bs.sampled_component, sample_fluoro) = 1;
             dr::masked(bs.sampled_type, sample_fluoro) =
                     +BSDFFlags::FluorescentReflection;
-            active &= !sample_fluoro;
         }
 
         UnpolarizedSpectrum value(0.f);
