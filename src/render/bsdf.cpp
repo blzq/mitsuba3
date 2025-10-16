@@ -227,6 +227,11 @@ std::string type_mask_to_string(Index type_mask) {
         oss << "delta_1d_transmission ";
         type_mask = type_mask & ~BSDFFlags::Delta1DTransmission;
     }
+    if (has_flag(type_mask, BSDFFlags::FluorescentReflection)) {
+        add_separator();
+        oss << "fluorescent_reflection ";
+        type_mask = type_mask & ~BSDFFlags::FluorescentReflection;
+    }
     if (has_flag(type_mask, BSDFFlags::Null)) {
         add_separator();
         oss << "null ";
