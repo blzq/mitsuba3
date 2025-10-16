@@ -63,6 +63,9 @@ enum class BSDFFlags : uint32_t {
     /// Transmission into a 1D space of directions
     Delta1DTransmission  = 0x00100,
 
+    /// Fluorescent ideally Diffuse reflection
+    FluorescentReflection = 0x00200,
+
     // =============================================================
     //!                   Other lobe attributes
     // =============================================================
@@ -91,14 +94,16 @@ enum class BSDFFlags : uint32_t {
 
     /// Any reflection component (scattering into discrete, 1D, or 2D set of directions)
     Reflection   = DiffuseReflection | DeltaReflection |
-                   Delta1DReflection | GlossyReflection,
+                   Delta1DReflection | GlossyReflection |
+                   FluorescentReflection,
 
     /// Any transmission component (scattering into discrete, 1D, or 2D set of directions)
     Transmission = DiffuseTransmission | DeltaTransmission |
                    Delta1DTransmission | GlossyTransmission | Null,
 
     /// Diffuse scattering into a 2D set of directions
-    Diffuse      = DiffuseReflection | DiffuseTransmission,
+    Diffuse      = DiffuseReflection | DiffuseTransmission |
+                   FluorescentReflection,
 
     /// Non-diffuse scattering into a 2D set of directions
     Glossy       = GlossyReflection | GlossyTransmission,
@@ -141,7 +146,7 @@ struct MI_EXPORT_LIB BSDFContext {
      * Bit mask for requested BSDF component types to be sampled/evaluated
      * The default value (equal to \ref BSDFFlags::All) enables all components.
      */
-    uint32_t type_mask = (uint32_t) 0x1FFu;
+    uint32_t type_mask = (uint32_t) 0x3FFu;
 
     /// Integer value of requested BSDF component index to be sampled/evaluated.
     uint32_t component = (uint32_t) -1;
