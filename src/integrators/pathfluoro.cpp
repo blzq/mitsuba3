@@ -201,15 +201,6 @@ public:
             SurfaceInteraction3f si =
                 ls.pi.compute_surface_interaction(ls.ray, +RayFlags::All);
 
-            BSDFPtr bsdf = si.bsdf(ls.ray);
-            
-            SurfaceInteraction3f fluoro_si = si;
-            fluoro_si.wavelengths = Wavelength(420.f);
-            fluoro_si = dr::select(
-                has_flag(bsdf->flags(), BSDFFlags::FluorescentReflection), 
-                fluoro_si, si
-            );
-
             // ---------------------- Direct emission ----------------------
 
             if (dr::any_or<true>(si.emitter(scene) != nullptr)) {
@@ -239,7 +230,14 @@ public:
                 return; // early exit for scalar mode
             }
 
-            // BSDFPtr bsdf = si.bsdf(ls.ray);
+            BSDFPtr bsdf = si.bsdf(ls.ray);
+
+            SurfaceInteraction3f fluoro_si = si;
+            fluoro_si.wavelengths = Wavelength(420.f);
+            fluoro_si = dr::select(
+                has_flag(bsdf->flags(), BSDFFlags::FluorescentReflection),
+                fluoro_si, si
+            );
 
             // ---------------------- Emitter sampling ----------------------
 
@@ -319,7 +317,7 @@ public:
                          !has_flag(bsdf_sample.sampled_type, BSDFFlags::Null);
 
             // Information about the current vertex needed by the next iteration
-            ls.prev_si = Interaction3f(si);
+            ls.prev_si = Interaction3f(fluoro_si);
             ls.prev_bsdf_pdf = bsdf_sample.pdf;
             ls.prev_bsdf_delta = has_flag(bsdf_sample.sampled_type, BSDFFlags::Delta);
 
