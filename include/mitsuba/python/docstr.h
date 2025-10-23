@@ -970,6 +970,26 @@ Parameter ``si``:
 Parameter ``wo``:
     The outgoing direction)doc";
 
+static const char *__doc_mitsuba_BSDF_eval_fluoro =
+R"doc(Similar to eval(), but only includes fluorescent contribution
+to the evaluated value. This must be handled separately as the incident
+light will be wavelength shifted in the fluorescent case but not in the
+usual reflection case.
+For materials with no fluorescent component, this should return zero,
+which is the default behaviour.
+
+Parameter ``ctx``:
+    A context data structure describing which lobes to evaluate, and
+    whether radiance or importance are being transported.
+
+Parameter ``si``:
+    A surface interaction data structure describing the underlying
+    surface position. The incident direction is obtained from the
+    field ``si.wi``.
+
+Parameter ``wo``:
+    The outgoing direction)doc";
+
 static const char *__doc_mitsuba_BSDF_eval_attribute =
 R"doc(Evaluate a specific BSDF attribute at the given surface interaction.
 
@@ -1065,6 +1085,24 @@ BSDFContext::type_mask fields).
 
 Note that the incident direction does not need to be explicitly
 specified. It is obtained from the field ``si.wi``.
+
+Parameter ``ctx``:
+    A context data structure describing which lobes to evaluate, and
+    whether radiance or importance are being transported.
+
+Parameter ``si``:
+    A surface interaction data structure describing the underlying
+    surface position. The incident direction is obtained from the
+    field ``si.wi``.
+
+Parameter ``wo``:
+    The outgoing direction)doc";
+
+static const char *__doc_mitsuba_BSDF_eval_fluoro_pdf =
+R"doc(Equivalent to eval_pdf(), but only includes fluorescent contribution
+to the evaluated value. This must be handled separately as the incident
+light will be wavelength shifted in the fluorescent case but not in the
+usual reflection case.
 
 Parameter ``ctx``:
     A context data structure describing which lobes to evaluate, and

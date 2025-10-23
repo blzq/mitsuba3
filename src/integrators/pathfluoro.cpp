@@ -232,10 +232,19 @@ public:
 
             BSDFPtr bsdf = si.bsdf(ls.ray);
 
+            /* Separate sample() from eval_pdf() to be before emitter sampling
+               to decide if the interaction should be wavelength-shifting (fluorescent) */
+            Float sample_1 = ls.sampler->next_1d();
+            Point2f sample_2 = ls.sampler->next_2d();
+
+            auto [bsdf_sample, bsdf_weight]
+                = bsdf->sample(bsdf_ctx, si, sample_1, sample_2);
+
+            Mask is_fluoro = has_flag(bsdf_sample.sampled_type, BSDFFlags::FluorescentReflection);
             SurfaceInteraction3f fluoro_si = si;
-            fluoro_si.wavelengths = Wavelength(420.f);
+            fluoro_si.wavelengths = Wavelength(425.f); // TODO
             fluoro_si = dr::select(
-                has_flag(bsdf->flags(), BSDFFlags::FluorescentReflection),
+                is_fluoro,
                 fluoro_si, si
             );
 
@@ -250,17 +259,20 @@ public:
 
             if (dr::any_or<true>(active_em)) {
                 // Sample the emitter
-
-                // Use the fluorescent excitation wavelength to sample emitter
                 std::tie(ds, em_weight) = scene->sample_emitter_direction(
-                    fluoro_si, ls.sampler->next_2d(), true, active_em);
+                    dr::select(is_fluoro, fluoro_si, si),
+                    ls.sampler->next_2d(), true, active_em
+                );
                 active_em &= (ds.pdf != 0.f);
 
                 /* Given the detached emitter sample, recompute its contribution
                    with AD to enable light source optimization. */
                 if (dr::grad_enabled(si.p)) {
                     ds.d = dr::normalize(ds.p - si.p);
-                    Spectrum em_val = scene->eval_emitter_direction(fluoro_si, ds, active_em);
+                    Spectrum em_val = scene->eval_emitter_direction(
+                        dr::select(is_fluoro, fluoro_si, si),
+                        ds, active_em
+                    );
                     em_weight = dr::select(ds.pdf != 0, em_val / ds.pdf, 0);
                 }
 
@@ -269,11 +281,20 @@ public:
 
             // ------ Evaluate BSDF * cos(theta) and sample direction -------
 
-            Float sample_1 = ls.sampler->next_1d();
-            Point2f sample_2 = ls.sampler->next_2d();
+            auto bsdf_fluoro_result = bsdf->eval_fluoro_pdf(bsdf_ctx, si, wo);
+            auto bsdf_result = bsdf->eval_pdf(bsdf_ctx, si, wo);
 
-            auto [bsdf_val, bsdf_pdf, bsdf_sample, bsdf_weight]
-                = bsdf->eval_pdf_sample(bsdf_ctx, si, wo, sample_1, sample_2);
+            auto [bsdf_val, bsdf_pdf] = dr::select(
+                is_fluoro,
+                bsdf_fluoro_result,
+                bsdf_result
+            );
+
+            // auto [bsdf_val, bsdf_pdf] = dr::select(
+            //     is_fluoro,
+            //     bsdf->eval_fluoro_pdf(bsdf_ctx, si, wo),
+            //     bsdf->eval_pdf(bsdf_ctx, si, wo)
+            // );
 
             // --------------- Emitter sampling contribution ----------------
 
@@ -285,8 +306,13 @@ public:
                     dr::select(ds.delta, 1.f, mis_weight(ds.pdf, bsdf_pdf));
 
                 // Accumulate, being careful with polarization (see spec_fma)
-                ls.result[active_em] = spec_fma(
-                    ls.throughput, bsdf_val * em_weight * mis_em, ls.result);
+                UnpolarizedSpectrum excitation = 1.0; // TODO
+                Spectrum value = dr::select(
+                    is_fluoro,
+                    excitation * bsdf_val * em_weight * mis_em,
+                    bsdf_val * em_weight * mis_em
+                );
+                ls.result[active_em] = spec_fma(ls.throughput, value, ls.result);
             }
 
             // ---------------------- BSDF sampling ----------------------
@@ -305,7 +331,12 @@ public:
 
                 // Recompute 'wo' to propagate derivatives to cosine term
                 Vector3f wo_2 = si.to_local(ls.ray.d);
-                auto [bsdf_val_2, bsdf_pdf_2] = bsdf->eval_pdf(bsdf_ctx, si, wo_2, ls.active);
+                auto [bsdf_val_2, bsdf_pdf_2] = dr::select(
+                    is_fluoro,
+                    bsdf->eval_fluoro_pdf(bsdf_ctx, si, wo_2, ls.active),
+                    bsdf->eval_pdf(bsdf_ctx, si, wo_2, ls.active)
+                );
+
                 bsdf_weight[bsdf_pdf_2 > 0.f] = bsdf_val_2 / dr::detach(bsdf_pdf_2);
             }
 
