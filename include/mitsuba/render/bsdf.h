@@ -163,7 +163,7 @@ struct MI_EXPORT_LIB BSDFContext {
 
     BSDFContext() = default;
 
-    BSDFContext(TransportMode mode, uint32_t type_mask = (uint32_t) 0x1FFu,
+    BSDFContext(TransportMode mode, uint32_t type_mask = (uint32_t) 0x3FFu,
                 uint32_t component = (uint32_t) -1)
         : mode(mode), type_mask(type_mask), component(component) { }
 
@@ -357,7 +357,32 @@ public:
                           Mask active = true) const = 0;
 
     /**
-     * Compute the probability per unit solid angle of sampling a
+     * \brief Similar to eval(), but only includes fluorescent contribution
+     * to the evaluated value. This must be handled separately as the incident
+     * light will be wavelength shifted in the fluorescent case but not in the
+     * usual reflection case.
+     * For materials with no fluorescent component, this should return zero,
+     * which is the default behaviour.
+     *
+     * \param ctx
+     *     A context data structure describing which lobes to evaluate,
+     *     and whether radiance or importance are being transported.
+     *
+     * \param si
+     *     A surface interaction data structure describing the underlying
+     *     surface position. The incident direction is obtained from
+     *     the field <tt>si.wi</tt>.
+     *
+     * \param wo
+     *     The outgoing direction
+     */
+    virtual Spectrum eval_fluoro(const BSDFContext &ctx,
+                                 const SurfaceInteraction3f &si,
+                                 const Vector3f &wo,
+                                 Mask active = true) const;
+
+    /**
+     * \brief Compute the probability per unit solid angle of sampling a
      * given direction
      *
      * This method provides access to the probability density that would result
@@ -422,8 +447,31 @@ public:
                                                 Mask active = true) const;
 
     /**
-     * Jointly evaluate the BSDF f(wi, wo), the probability per unit
-     * solid angle of sampling the given direction ``wo`` and importance sample
+     * \brief Equivalent to eval_pdf(), but only includes fluorescent contribution
+     * to the evaluated value. This must be handled separately as the incident
+     * light will be wavelength shifted in the fluorescent case but not in the
+     * usual reflection case.
+     *
+     * \param ctx
+     *     A context data structure describing which lobes to evaluate,
+     *     and whether radiance or importance are being transported.
+     *
+     * \param si
+     *     A surface interaction data structure describing the underlying
+     *     surface position. The incident direction is obtained from
+     *     the field <tt>si.wi</tt>.
+     *
+     * \param wo
+     *     The outgoing direction
+     */
+    virtual std::pair<Spectrum, Float> eval_fluoro_pdf(const BSDFContext &ctx,
+                                                       const SurfaceInteraction3f &si,
+                                                       const Vector3f &wo,
+                                                       Mask active = true) const;
+
+    /**
+     * \brief Jointly evaluate the BSDF f(wi, wo), the probability per unit
+     * solid angle of sampling the given direction \c wo and importance sample
      * the BSDF model.
      *
      * This is simply a wrapper around two separate function calls to
@@ -657,9 +705,11 @@ NAMESPACE_END(mitsuba)
 DRJIT_CALL_TEMPLATE_BEGIN(mitsuba::BSDF)
     DRJIT_CALL_METHOD(sample)
     DRJIT_CALL_METHOD(eval)
+    DRJIT_CALL_METHOD(eval_fluoro)
     DRJIT_CALL_METHOD(eval_null_transmission)
     DRJIT_CALL_METHOD(pdf)
     DRJIT_CALL_METHOD(eval_pdf)
+    DRJIT_CALL_METHOD(eval_fluoro_pdf)
     DRJIT_CALL_METHOD(eval_pdf_sample)
     DRJIT_CALL_METHOD(eval_diffuse_reflectance)
     DRJIT_CALL_METHOD(has_attribute)
