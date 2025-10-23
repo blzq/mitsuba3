@@ -116,64 +116,88 @@ public:
 
         Float cos_theta_i = Frame3f::cos_theta(si.wi);
         BSDFSample3f bs = dr::zeros<BSDFSample3f>();
-        
+
         active &= cos_theta_i > 0.f;
 
         if (unlikely((!has_diffuse && !has_fluoro) || dr::none_or<false>(active)))
             return { bs, 0.f };
 
-        Float prob_diffuse = 0.5f; //TODO
+        UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
+        UnpolarizedSpectrum fluoro_value = m_fluorescence->eval(si, active);
+
+        // TODO: Invalid in RGB case, and a bad approximation in spectral case
+        // Float prob_diffuse = dr::sum(diffuse_value) / dr::sum(diffuse_value + fluoro_value);
+        Float prob_diffuse = 0.1;
+        Float prob_fluoro = 0.9;
+
+        if (unlikely(has_fluoro != has_diffuse))
+            prob_diffuse = has_diffuse ? 1.f : 0.f;
+        else
+            prob_diffuse = prob_diffuse / (prob_fluoro + prob_diffuse);
+
         Mask sample_diffuse = active && sample1 < prob_diffuse;
         Mask sample_fluoro = active && !sample_diffuse;
-        
+
         bs.wo = warp::square_to_cosine_hemisphere(sample2);
         bs.pdf = warp::square_to_cosine_hemisphere_pdf(bs.wo);
         bs.eta = 1.f;
+
+        UnpolarizedSpectrum result(0.f);
 
         if (dr::any_or<true>(sample_diffuse)) {
             dr::masked(bs.sampled_component, sample_diffuse) = 0;
             dr::masked(bs.sampled_type, sample_diffuse) =
                     +BSDFFlags::DiffuseReflection;
+            result[sample_diffuse] = diffuse_value;
         }
         if (dr::any_or<true>(sample_fluoro)) {
             dr::masked(bs.sampled_component, sample_fluoro) = 1;
             dr::masked(bs.sampled_type, sample_fluoro) =
                     +BSDFFlags::FluorescentReflection;
+            result[sample_fluoro] = fluoro_value;
         }
 
-        UnpolarizedSpectrum value(0.f);
-        if (has_diffuse) {
-            value += m_reflectance->eval(si, active);
-        }
-        if (has_fluoro) {
-            value += m_fluorescence->eval(si, active);
-        }
-
-        return { bs, depolarizer<Spectrum>(value) & (active && bs.pdf > 0.f) };
+        return { bs, depolarizer<Spectrum>(result) & (active && bs.pdf > 0.f) };
     }
 
     Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
                   const Vector3f &wo, Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
 
-        bool has_diffuse  = ctx.is_enabled(BSDFFlags::DiffuseReflection, 0),
-             has_fluoro = ctx.is_enabled(BSDFFlags::FluorescentReflection, 1);
-        
+        bool has_diffuse = ctx.is_enabled(BSDFFlags::DiffuseReflection, 0);
+
         Float cos_theta_i = Frame3f::cos_theta(si.wi),
               cos_theta_o = Frame3f::cos_theta(wo);
-        
+
         active &= cos_theta_i > 0.f && cos_theta_o > 0.f;
 
-        if (unlikely((!has_diffuse && !has_fluoro) || dr::none_or<false>(active)))
+        if (unlikely(!has_diffuse || dr::none_or<false>(active)))
             return { 0.f };
-        
-        UnpolarizedSpectrum value(0.f);
-        if (has_diffuse) {
-            value += m_reflectance->eval(si, active) * dr::InvPi<Float> * cos_theta_o;
-        }
-        if (has_fluoro) {
-            value += m_fluorescence->eval(si, active) * dr::InvPi<Float> * cos_theta_o;
-        }
+
+        UnpolarizedSpectrum value =
+            m_reflectance->eval(si, active) * dr::InvPi<Float> * cos_theta_o;
+
+        return depolarizer<Spectrum>(value) & active;
+    }
+
+    Spectrum eval_fluoro(const BSDFContext &ctx,
+                                 const SurfaceInteraction3f &si,
+                                 const Vector3f &wo,
+                                 Mask active) const override {
+        MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
+
+        bool has_fluoro = ctx.is_enabled(BSDFFlags::FluorescentReflection, 1);
+
+        Float cos_theta_i = Frame3f::cos_theta(si.wi),
+              cos_theta_o = Frame3f::cos_theta(wo);
+
+        active &= cos_theta_i > 0.f && cos_theta_o > 0.f;
+
+        if (unlikely(!has_fluoro || dr::none_or<false>(active)))
+            return { 0.f };
+
+        UnpolarizedSpectrum value =
+            m_fluorescence->eval(si, active) * dr::InvPi<Float> * cos_theta_o;
 
         return depolarizer<Spectrum>(value) & active;
     }
@@ -182,7 +206,7 @@ public:
               const Vector3f &wo, Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
 
-        if (!ctx.is_enabled(BSDFFlags::DiffuseReflection) && 
+        if (!ctx.is_enabled(BSDFFlags::DiffuseReflection) &&
             !ctx.is_enabled(BSDFFlags::FluorescentReflection))
             return 0.f;
 
@@ -200,24 +224,42 @@ public:
                                         Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
 
-        bool has_diffuse  = ctx.is_enabled(BSDFFlags::DiffuseReflection, 0),
-             has_fluoro = ctx.is_enabled(BSDFFlags::FluorescentReflection, 1);
-        
+        bool has_diffuse = ctx.is_enabled(BSDFFlags::DiffuseReflection, 0);
+
         Float cos_theta_i = Frame3f::cos_theta(si.wi),
               cos_theta_o = Frame3f::cos_theta(wo);
-        
+
         active &= cos_theta_i > 0.f && cos_theta_o > 0.f;
 
-        if (unlikely((!has_diffuse && !has_fluoro) || dr::none_or<false>(active)))
+        if (unlikely(!has_diffuse || dr::none_or<false>(active)))
             return { 0.f, 0.f };
-        
-        UnpolarizedSpectrum value(0.f);
-        if (has_diffuse) {
-            value += m_reflectance->eval(si, active) * dr::InvPi<Float> * cos_theta_o;
-        }
-        if (has_fluoro) {
-            value += m_fluorescence->eval(si, active) * dr::InvPi<Float> * cos_theta_o;
-        }
+
+        UnpolarizedSpectrum value =
+            m_reflectance->eval(si, active) * dr::InvPi<Float> * cos_theta_o;
+
+        Float pdf = warp::square_to_cosine_hemisphere_pdf(wo);
+
+        return { depolarizer<Spectrum>(value) & active, dr::select(active, pdf, 0.f) };
+    }
+
+    std::pair<Spectrum, Float> eval_fluoro_pdf(const BSDFContext &ctx,
+                                               const SurfaceInteraction3f &si,
+                                               const Vector3f &wo,
+                                               Mask active) const override {
+        MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
+
+        bool has_fluoro = ctx.is_enabled(BSDFFlags::FluorescentReflection, 1);
+
+        Float cos_theta_i = Frame3f::cos_theta(si.wi),
+              cos_theta_o = Frame3f::cos_theta(wo);
+
+        active &= cos_theta_i > 0.f && cos_theta_o > 0.f;
+
+        if (unlikely(!has_fluoro || dr::none_or<false>(active)))
+            return { 0.f, 0.f };
+
+        UnpolarizedSpectrum value =
+            m_fluorescence->eval(si, active) * dr::InvPi<Float> * cos_theta_o;
 
         Float pdf = warp::square_to_cosine_hemisphere_pdf(wo);
 
