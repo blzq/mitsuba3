@@ -53,6 +53,13 @@ public:
         NB_OVERRIDE_PURE(eval, ctx, si, wo, active);
     }
 
+    // Spectrum eval_fluoro(const BSDFContext &ctx,
+    //                      const SurfaceInteraction3f &si,
+    //                      const Vector3f &wo,
+    //                      Mask active) const override {
+    //     NB_OVERRIDE_PURE(eval_fluoro, ctx, si, wo, active);
+    // }
+
     Float pdf(const BSDFContext &ctx,
               const SurfaceInteraction3f &si,
               const Vector3f &wo,
@@ -66,6 +73,13 @@ public:
               Mask active) const override {
         NB_OVERRIDE(eval_pdf, ctx, si, wo, active);
     }
+
+    // std::pair<Spectrum, Float> eval_fluoro_pdf(const BSDFContext &ctx,
+    //                                            const SurfaceInteraction3f &si,
+    //                                            const Vector3f &wo,
+    //                                            Mask active) const override {
+    //     NB_OVERRIDE(eval_fluoro_pdf, ctx, si, wo, active);
+    // }
 
     Spectrum eval_diffuse_reflectance(const SurfaceInteraction3f &si,
                                       Mask active) const override {
@@ -125,6 +139,11 @@ template <typename Ptr, typename Cls> void bind_bsdf_generic(Cls &cls) {
                 const Vector3f &wo,
                 Mask active) { return bsdf->eval(ctx, si, wo, active);
              }, "ctx"_a, "si"_a, "wo"_a, "active"_a = true, D(BSDF, eval))
+        .def("eval_fluoro",
+             [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
+                const Vector3f &wo,
+                Mask active) { return bsdf->eval_fluoro(ctx, si, wo, active);
+             }, "ctx"_a, "si"_a, "wo"_a, "active"_a = true, D(BSDF, eval_fluoro))
         .def("pdf",
              [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
                 const Vector3f &wo,
@@ -135,6 +154,11 @@ template <typename Ptr, typename Cls> void bind_bsdf_generic(Cls &cls) {
                 const Vector3f &wo,
                 Mask active) { return bsdf->eval_pdf(ctx, si, wo, active);
              }, "ctx"_a, "si"_a, "wo"_a, "active"_a = true, D(BSDF, eval_pdf))
+        .def("eval_fluoro_pdf",
+             [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
+                const Vector3f &wo,
+                Mask active) { return bsdf->eval_fluoro_pdf(ctx, si, wo, active);
+             }, "ctx"_a, "si"_a, "wo"_a, "active"_a = true, D(BSDF, eval_fluoro_pdf))
         .def("eval_pdf_sample",
              [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
                 const Vector3f &wo, Float sample1, const Point2f &sample2,
