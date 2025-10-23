@@ -18,6 +18,26 @@ BSDF<Float, Spectrum>::eval_pdf(const BSDFContext &ctx,
     return { eval(ctx, si, wo, active), pdf(ctx, si, wo, active) };
 }
 
+MI_VARIANT Spectrum
+BSDF<Float, Spectrum>::eval_fluoro(const BSDFContext &ctx,
+                                 const SurfaceInteraction3f &si,
+                                 const Vector3f &wo,
+                                 Mask active) const {
+    DRJIT_MARK_USED(ctx);
+    DRJIT_MARK_USED(si);
+    DRJIT_MARK_USED(wo);
+    DRJIT_MARK_USED(active);
+    return 0.f;
+}
+
+MI_VARIANT std::pair<Spectrum, Float>
+BSDF<Float, Spectrum>::eval_fluoro_pdf(const BSDFContext &ctx,
+                                                       const SurfaceInteraction3f &si,
+                                                       const Vector3f &wo,
+                                                       Mask active) const {
+    return { eval_fluoro(ctx, si, wo, active), pdf(ctx, si, wo, active) };
+}
+
 MI_VARIANT std::tuple<Spectrum, Float, typename BSDF<Float, Spectrum>::BSDFSample3f, Spectrum>
 BSDF<Float, Spectrum>::eval_pdf_sample(const BSDFContext &ctx,
                                        const SurfaceInteraction3f &si,
