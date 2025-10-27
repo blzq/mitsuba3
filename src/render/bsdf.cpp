@@ -19,22 +19,18 @@ BSDF<Float, Spectrum>::eval_pdf(const BSDFContext &ctx,
 }
 
 MI_VARIANT Spectrum
-BSDF<Float, Spectrum>::eval_fluoro(const BSDFContext &ctx,
-                                 const SurfaceInteraction3f &si,
-                                 const Vector3f &wo,
-                                 Mask active) const {
-    DRJIT_MARK_USED(ctx);
-    DRJIT_MARK_USED(si);
-    DRJIT_MARK_USED(wo);
-    DRJIT_MARK_USED(active);
+BSDF<Float, Spectrum>::eval_fluoro(const BSDFContext & /* ctx */,
+                                   const SurfaceInteraction3f & /* si */,
+                                   const Vector3f & /* wo */,
+                                   Mask active) const {
     return 0.f;
 }
 
 MI_VARIANT std::pair<Spectrum, Float>
-BSDF<Float, Spectrum>::eval_fluoro_pdf(const BSDFContext &ctx,
-                                                       const SurfaceInteraction3f &si,
-                                                       const Vector3f &wo,
-                                                       Mask active) const {
+BSDF<Float, Spectrum>::eval_pdf_fluoro(const BSDFContext &ctx,
+                                       const SurfaceInteraction3f &si,
+                                       const Vector3f &wo,
+                                       Mask active) const {
     return { eval_fluoro(ctx, si, wo, active), pdf(ctx, si, wo, active) };
 }
 
@@ -61,6 +57,14 @@ MI_VARIANT Spectrum BSDF<Float, Spectrum>::eval_diffuse_reflectance(
     BSDFContext ctx;
     return eval(ctx, si, wo, active) * dr::Pi<Float>;
 }
+
+MI_VARIANT std::pair<typename BSDF<Float, Spectrum>::Wavelength, 
+                     typename BSDF<Float, Spectrum>::UnpolarizedSpectrum> 
+BSDF<Float, Spectrum>::sample_excitation(const SurfaceInteraction3f &si, 
+                                         Float /* sample */, 
+                                         Mask active) const {
+    return { si.wavelengths, UnpolarizedSpectrum(1.f) && active };
+};
 
 template <typename Texture, typename Type>
 struct AttributeCallback : public TraversalCallback {

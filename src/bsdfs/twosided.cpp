@@ -182,6 +182,41 @@ public:
         return result;
     }
 
+    Spectrum eval_fluoro(const BSDFContext &ctx_, const SurfaceInteraction3f &si_,
+                         const Vector3f &wo_, Mask active) const override {
+        MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
+
+        SurfaceInteraction3f si(si_);
+        BSDFContext ctx(ctx_);
+        Vector3f wo(wo_);
+        Spectrum result = 0.f;
+
+        if (m_brdf[0] == m_brdf[1]) {
+            wo.z() = dr::mulsign(wo.z(), si.wi.z());
+            si.wi.z() = dr::abs(si.wi.z());
+            result = m_brdf[0]->eval_fluoro(ctx, si, wo, active);
+        } else {
+            Mask front_side = Frame3f::cos_theta(si.wi) > 0.f && active,
+                 back_side  = Frame3f::cos_theta(si.wi) < 0.f && active;
+
+            if (dr::any_or<true>(front_side))
+                result = m_brdf[0]->eval_fluoro(ctx, si, wo, front_side);
+
+            if (dr::any_or<true>(back_side)) {
+                if (ctx.component != (uint32_t) -1)
+                    ctx.component -= (uint32_t) m_brdf[0]->component_count();
+
+                si.wi.z() *= -1.f;
+                wo.z() *= -1.f;
+
+                dr::masked(result, back_side) =
+                    m_brdf[1]->eval_fluoro(ctx, si, wo, back_side);
+            }
+        }
+
+        return result;
+    }
+
     Float pdf(const BSDFContext &ctx_, const SurfaceInteraction3f &si_,
               const Vector3f &wo_, Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
@@ -257,6 +292,47 @@ public:
         return { value, pdf };
     }
 
+    std::pair<Spectrum, Float> eval_pdf_fluoro(const BSDFContext &ctx_,
+                                               const SurfaceInteraction3f &si_,
+                                               const Vector3f &wo_,
+                                               Mask active) const override {
+        MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
+
+        SurfaceInteraction3f si(si_);
+        BSDFContext ctx(ctx_);
+        Vector3f wo(wo_);
+
+        Spectrum value = 0.f;
+        Float pdf = 0.f;
+
+        if (m_brdf[0] == m_brdf[1]) {
+            wo.z() = dr::mulsign(wo.z(), si.wi.z());
+            si.wi.z() = dr::abs(si.wi.z());
+            std::tie(value, pdf) = m_brdf[0]->eval_pdf_fluoro(ctx, si, wo, active);
+        } else {
+            Mask front_side = Frame3f::cos_theta(si.wi) > 0.f && active,
+                 back_side  = Frame3f::cos_theta(si.wi) < 0.f && active;
+
+            if (dr::any_or<true>(front_side))
+                std::tie(value, pdf) = m_brdf[0]->eval_pdf_fluoro(ctx, si, wo, front_side);
+
+            if (dr::any_or<true>(back_side)) {
+                if (ctx.component != (uint32_t) -1)
+                    ctx.component -= (uint32_t) m_brdf[0]->component_count();
+
+                si.wi.z() *= -1.f;
+                wo.z() *= -1.f;
+
+                auto [back_value, back_pdf] = m_brdf[1]->eval_pdf_fluoro(ctx, si, wo, back_side);
+
+                dr::masked(value, back_side) = back_value;
+                dr::masked(pdf, back_side) = back_pdf;
+            }
+        }
+
+        return { value, pdf };
+    }
+
     Spectrum eval_null_transmission(const SurfaceInteraction3f &si_, Mask active) const override {
         SurfaceInteraction3f si(si_);
 
@@ -300,6 +376,28 @@ public:
                 si.wi.z() *= -1.f;
                 dr::masked(result, back_side) =
                     m_brdf[1]->eval_diffuse_reflectance(si, back_side);
+            }
+
+            return result;
+        }
+    }
+
+    std::pair<Wavelength, UnpolarizedSpectrum> sample_excitation(
+        const SurfaceInteraction3f &si, Float sample, Mask active) const override {
+
+        if (m_brdf[0] == m_brdf[1]) {
+            return m_brdf[0]->sample_excitation(si, sample, active);
+        } else {
+            std::pair<Wavelength, UnpolarizedSpectrum> result;
+            Mask front_side = Frame3f::cos_theta(si.wi) > 0.f && active,
+                 back_side  = Frame3f::cos_theta(si.wi) < 0.f && active;
+
+            if (dr::any_or<true>(front_side))
+                result = m_brdf[0]->sample_excitation(si, sample, front_side);
+
+            if (dr::any_or<true>(back_side)) {
+                dr::masked(result, back_side) =
+                    m_brdf[1]->sample_excitation(si, sample, back_side);
             }
 
             return result;
