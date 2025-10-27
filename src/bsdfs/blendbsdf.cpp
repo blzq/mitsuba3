@@ -178,6 +178,25 @@ public:
                m_nested_bsdf[1]->eval(ctx, si, wo, active) * weight;
     }
 
+    Spectrum eval_fluoro(const BSDFContext &ctx, const SurfaceInteraction3f &si,
+                         const Vector3f &wo, Mask active) const override {
+        MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
+
+        Float weight = eval_weight(si, active);
+        if (unlikely(ctx.component != (uint32_t) -1)) {
+            bool sample_first = ctx.component < m_nested_bsdf[0]->component_count();
+            BSDFContext ctx2(ctx);
+            if (!sample_first)
+                ctx2.component -= (uint32_t) m_nested_bsdf[0]->component_count();
+            else
+                weight = 1.f - weight;
+            return weight * m_nested_bsdf[sample_first ? 0 : 1]->eval_fluoro(ctx2, si, wo, active);
+        }
+
+        return m_nested_bsdf[0]->eval_fluoro(ctx, si, wo, active) * (1 - weight) +
+               m_nested_bsdf[1]->eval_fluoro(ctx, si, wo, active) * weight;
+    }
+
     Float pdf(const BSDFContext &ctx, const SurfaceInteraction3f &si,
               const Vector3f &wo, Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
@@ -221,6 +240,32 @@ public:
                  pdf_0 * (1 - weight) + pdf_1 * weight };
     }
 
+    std::pair<Spectrum, Float> eval_pdf_fluoro(const BSDFContext &ctx,
+                                               const SurfaceInteraction3f &si,
+                                               const Vector3f &wo,
+                                               Mask active) const override {
+        MI_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
+
+        Float weight = eval_weight(si, active);
+        if (unlikely(ctx.component != (uint32_t) -1)) {
+            bool sample_first = ctx.component < m_nested_bsdf[0]->component_count();
+            BSDFContext ctx2(ctx);
+            if (!sample_first)
+                ctx2.component -= (uint32_t) m_nested_bsdf[0]->component_count();
+            else
+                weight = 1.f - weight;
+
+            auto [val, pdf] = m_nested_bsdf[sample_first ? 0 : 1]->eval_pdf_fluoro(ctx2, si, wo, active);
+            return { weight * val, pdf };
+        }
+
+        auto [val_0, pdf_0] = m_nested_bsdf[0]->eval_pdf_fluoro(ctx, si, wo, active);
+        auto [val_1, pdf_1] = m_nested_bsdf[1]->eval_pdf_fluoro(ctx, si, wo, active);
+
+        return { val_0 * (1 - weight) + val_1 * weight,
+                 pdf_0 * (1 - weight) + pdf_1 * weight };
+    }
+
     MI_INLINE Float eval_weight(const SurfaceInteraction3f &si, const Mask &active) const {
         return dr::clip(m_weight->eval_1(si, active), 0.f, 1.f);
     }
@@ -230,6 +275,26 @@ public:
         Float weight = eval_weight(si, active);
         return m_nested_bsdf[0]->eval_diffuse_reflectance(si, active) * (1 - weight) +
                m_nested_bsdf[1]->eval_diffuse_reflectance(si, active) * weight;
+    }
+
+    std::pair<Wavelength, UnpolarizedSpectrum> sample_excitation(
+        const SurfaceInteraction3f &si, Float sample, Mask active) const override {
+        Float weight = eval_weight(si, active);
+
+        std::pair<Wavelength, UnpolarizedSpectrum> result;
+
+        Mask m0 = active && sample >  weight,
+             m1 = active && sample <= weight;
+
+        if (dr::any_or<true>(m0)) {
+            dr::masked(result, m0) = m_nested_bsdf[0]->sample_excitation(si, sample, m0);
+        }
+
+        if (dr::any_or<true>(m1)) {
+            dr::masked(result, m1) = m_nested_bsdf[1]->sample_excitation(si, sample, m1);
+        }
+
+        return result;
     }
 
     Spectrum eval_null_transmission(const SurfaceInteraction3f &si,

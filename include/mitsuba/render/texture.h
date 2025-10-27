@@ -174,6 +174,16 @@ public:
      */
     virtual Float mean() const;
 
+   /**
+     * Return the integral of the spectrum, for normalization of spectra values.
+     *
+     * Not every implementation necessarily provides this function. The default
+     * implementation throws an exception.
+     *
+     * Even if the operation is provided, it may only return an approximation.
+     */
+    virtual Float sum() const;
+
     /**
      * \brief Returns the resolution of the texture, assuming that it is based
      * on a discrete representation.
@@ -245,7 +255,7 @@ DRJIT_CALL_TEMPLATE_BEGIN(mitsuba::Texture)
     DRJIT_CALL_METHOD(eval_1_grad)
     DRJIT_CALL_METHOD(eval_3)
     DRJIT_CALL_METHOD(mean)
-
+    DRJIT_CALL_METHOD(sum)
     DRJIT_CALL_GETTER(max)
     DRJIT_CALL_GETTER(is_spatially_varying)
 DRJIT_CALL_END()
