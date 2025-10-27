@@ -131,6 +131,10 @@ public:
         return m_distr.integral() / (range[1] - range[0]);
     }
 
+    Float sum() const override {
+        return m_distr.integral();
+    }
+
     ScalarVector2f wavelength_range() const override {
         return m_distr.range();
     }
