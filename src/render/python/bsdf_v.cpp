@@ -74,16 +74,21 @@ public:
         NB_OVERRIDE(eval_pdf, ctx, si, wo, active);
     }
 
-    // std::pair<Spectrum, Float> eval_fluoro_pdf(const BSDFContext &ctx,
-    //                                            const SurfaceInteraction3f &si,
-    //                                            const Vector3f &wo,
-    //                                            Mask active) const override {
-    //     NB_OVERRIDE(eval_fluoro_pdf, ctx, si, wo, active);
-    // }
+    std::pair<Spectrum, Float> eval_pdf_fluoro(const BSDFContext &ctx,
+                                               const SurfaceInteraction3f &si,
+                                               const Vector3f &wo,
+                                               Mask active) const override {
+        NB_OVERRIDE(eval_pdf_fluoro, ctx, si, wo, active);
+    }
 
     Spectrum eval_diffuse_reflectance(const SurfaceInteraction3f &si,
                                       Mask active) const override {
         NB_OVERRIDE(eval_diffuse_reflectance, si, active);
+    }
+
+    std::pair<Wavelength, UnpolarizedSpectrum> sample_excitation(
+        const SurfaceInteraction3f &si, Float sample, Mask active) const override {
+        NB_OVERRIDE(sample_excitation, si, sample, active);
     }
 
     Spectrum eval_null_transmission(const SurfaceInteraction3f &si,
@@ -154,11 +159,11 @@ template <typename Ptr, typename Cls> void bind_bsdf_generic(Cls &cls) {
                 const Vector3f &wo,
                 Mask active) { return bsdf->eval_pdf(ctx, si, wo, active);
              }, "ctx"_a, "si"_a, "wo"_a, "active"_a = true, D(BSDF, eval_pdf))
-        .def("eval_fluoro_pdf",
+        .def("eval_pdf_fluoro",
              [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
                 const Vector3f &wo,
-                Mask active) { return bsdf->eval_fluoro_pdf(ctx, si, wo, active);
-             }, "ctx"_a, "si"_a, "wo"_a, "active"_a = true, D(BSDF, eval_fluoro_pdf))
+                Mask active) { return bsdf->eval_pdf_fluoro(ctx, si, wo, active);
+             }, "ctx"_a, "si"_a, "wo"_a, "active"_a = true, D(BSDF, eval_pdf_fluoro))
         .def("eval_pdf_sample",
              [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
                 const Vector3f &wo, Float sample1, const Point2f &sample2,
@@ -174,7 +179,11 @@ template <typename Ptr, typename Cls> void bind_bsdf_generic(Cls &cls) {
              [](Ptr bsdf, const SurfaceInteraction3f &si, Mask active) {
                  return bsdf->eval_diffuse_reflectance(si, active);
              }, "si"_a, "active"_a = true, D(BSDF, eval_diffuse_reflectance))
-             .def("has_attribute",
+        .def("sample_excitation",
+             [](Ptr bsdf, const SurfaceInteraction3f &si, Float sample, Mask active) {
+                 return bsdf->sample_excitation(si, sample, active);
+             }, "si"_a, "sample"_a, "active"_a = true, D(BSDF, sample_excitation))
+        .def("has_attribute",
             [](Ptr bsdf, const std::string &name, const Mask &active) {
                 return bsdf->has_attribute(name, active);
             },

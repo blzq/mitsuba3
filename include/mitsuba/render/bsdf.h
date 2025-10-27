@@ -465,7 +465,7 @@ public:
      * \param wo
      *     The outgoing direction
      */
-    virtual std::pair<Spectrum, Float> eval_fluoro_pdf(const BSDFContext &ctx,
+    virtual std::pair<Spectrum, Float> eval_pdf_fluoro(const BSDFContext &ctx,
                                                        const SurfaceInteraction3f &si,
                                                        const Vector3f &wo,
                                                        Mask active = true) const;
@@ -634,7 +634,30 @@ public:
                                               Mask active = true) const;
 
     /**
-     * \brief Returns the shading frame accounting for any pertubations that may 
+     * \brief For fluorescent (wavelength-shifting) materials, samples a
+     * random wavelength, associated excitation value, and associated Monte Carlo
+     * importance weight in order to decide the wavelength and strength
+     * of incoming excitation radiation.
+     *
+     * For non-fluorescent materials, it should return the original wavelength
+     * and a weight of 1, which is the default behaviour.
+     *
+     * \param si
+     *     A surface interaction data structure describing the underlying
+     *     surface position. The incident direction is obtained from
+     *     the field <tt>si.wi</tt>.
+     *
+     * \param sample
+     *     A uniformly distributed sample on \f$[0,1]\f$. It is used
+     *     to select a random wavelength.
+     */
+    virtual std::pair<Wavelength, UnpolarizedSpectrum>
+    sample_excitation(const SurfaceInteraction3f &si,
+                      Float sample,
+                      Mask active = true) const;
+
+    /**
+     * \brief Returns the shading frame accounting for any pertubations that may
      * performed by the BSDF during evaluation.
      *
      * \param si
@@ -714,12 +737,13 @@ NAMESPACE_END(mitsuba)
 
 DRJIT_CALL_TEMPLATE_BEGIN(mitsuba::BSDF)
     DRJIT_CALL_METHOD(sample)
+    DRJIT_CALL_METHOD(sample_excitation)
     DRJIT_CALL_METHOD(eval)
     DRJIT_CALL_METHOD(eval_fluoro)
     DRJIT_CALL_METHOD(eval_null_transmission)
     DRJIT_CALL_METHOD(pdf)
     DRJIT_CALL_METHOD(eval_pdf)
-    DRJIT_CALL_METHOD(eval_fluoro_pdf)
+    DRJIT_CALL_METHOD(eval_pdf_fluoro)
     DRJIT_CALL_METHOD(eval_pdf_sample)
     DRJIT_CALL_METHOD(eval_diffuse_reflectance)
     DRJIT_CALL_METHOD(has_attribute)
@@ -727,6 +751,7 @@ DRJIT_CALL_TEMPLATE_BEGIN(mitsuba::BSDF)
     DRJIT_CALL_METHOD(eval_attribute_1)
     DRJIT_CALL_METHOD(eval_attribute_3)
     DRJIT_CALL_METHOD(sh_frame)
+    DRJIT_CALL_METHOD(to_string)
     DRJIT_CALL_GETTER(flags)
     auto needs_differentials() const { return has_flag(flags(), mitsuba::BSDFFlags::NeedsDifferentials); }
 DRJIT_CALL_END()

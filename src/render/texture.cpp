@@ -49,6 +49,11 @@ Texture<Float, Spectrum>::mean() const {
     NotImplementedError("mean");
 }
 
+MI_VARIANT Float
+Texture<Float, Spectrum>::sum() const {
+    NotImplementedError("sum");
+}
+
 MI_VARIANT
 std::pair<typename Texture<Float, Spectrum>::Point2f, Float>
 Texture<Float, Spectrum>::sample_position(const Point2f &sample,

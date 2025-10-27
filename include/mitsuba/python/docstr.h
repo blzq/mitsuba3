@@ -1098,7 +1098,7 @@ Parameter ``si``:
 Parameter ``wo``:
     The outgoing direction)doc";
 
-static const char *__doc_mitsuba_BSDF_eval_fluoro_pdf =
+static const char *__doc_mitsuba_BSDF_eval_pdf_fluoro =
 R"doc(Equivalent to eval_pdf(), but only includes fluorescent contribution
 to the evaluated value. This must be handled separately as the incident
 light will be wavelength shifted in the fluorescent case but not in the
@@ -1233,6 +1233,10 @@ other information. The contents are undefined if sampling failed.
 value: The BSDF value divided by the probability (multiplied by the
 cosine foreshortening factor when a non-delta component is sampled). A
 zero spectrum indicates that sampling failed.)doc";
+
+static const char *__doc_mitsuba_BSDF_sample_excitation =
+R"doc(
+)doc";
 
 static const char *__doc_mitsuba_BSDF_sh_frame =
 R"doc(Returns the shading frame accounting for any pertubations that may
@@ -11308,6 +11312,14 @@ R"doc(Returns the resolution of the spectrum in nanometers (if discretized)
 
 Not every implementation necessarily provides this function. The
 default implementation throws an exception.)doc";
+
+static const char *__doc_mitsuba_Texture_sum =
+R"doc(Return the integral of the spectrum, for normalization of spectra values.
+
+Not every implementation necessarily provides this function. The default
+implementation throws an exception.
+
+Even if the operation is provided, it may only return an approximation.)doc";
 
 static const char *__doc_mitsuba_Texture_traverse_1_cb_ro = R"doc()doc";
 
