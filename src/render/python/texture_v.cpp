@@ -63,6 +63,10 @@ public:
         NB_OVERRIDE_PURE(mean);
     }
 
+    Float sum() const override {
+        NB_OVERRIDE_PURE(sum);
+    }
+
     ScalarFloat max() const override {
         NB_OVERRIDE_PURE(max);
     }
@@ -145,6 +149,9 @@ template <typename Ptr, typename Cls> void bind_texture_generic(Cls &cls) {
         .def("mean",
              [](Ptr texture) { return texture->mean(); },
              D(Texture, mean))
+        .def("sum",
+             [](Ptr texture) { return texture->sum(); },
+             D(Texture, sum))
         .def("max",
              [](Ptr texture) { return texture->max(); },
              D(Texture, max))
