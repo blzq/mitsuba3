@@ -34,6 +34,11 @@ public:
         NB_OVERRIDE_PURE(pdf_spectrum, si, active);
     }
 
+    UnpolarizedSpectrum eval_norm(const SurfaceInteraction3f &si,
+                            Mask active = true) const override {
+        NB_OVERRIDE_PURE(eval_norm, si, active);
+    }
+
     std::pair<Point2f, Float>
     sample_position(const Point2f &sample, Mask active = true) const override {
         using Return = std::pair<Point2f, Float>;
@@ -130,6 +135,12 @@ template <typename Ptr, typename Cls> void bind_texture_generic(Cls &cls) {
                  return texture->pdf_spectrum(si, active);
              }, "si"_a, "active"_a = true,
              D(Texture, pdf_spectrum))
+        .def("eval_norm",
+             [](Ptr texture, const SurfaceInteraction3f &si,
+                Mask active) {
+                 return texture->eval_norm(si, active);
+             }, "si"_a, "active"_a = true,
+             D(Texture, eval_norm))
         .def("sample_position",
              [](Ptr texture, const Point2f &sample,
                 Mask active) {
