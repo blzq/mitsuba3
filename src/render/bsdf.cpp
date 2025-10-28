@@ -22,7 +22,7 @@ MI_VARIANT Spectrum
 BSDF<Float, Spectrum>::eval_fluoro(const BSDFContext & /* ctx */,
                                    const SurfaceInteraction3f & /* si */,
                                    const Vector3f & /* wo */,
-                                   Mask active) const {
+                                   Mask /* active */) const {
     return 0.f;
 }
 
@@ -41,9 +41,9 @@ BSDF<Float, Spectrum>::eval_pdf_sample(const BSDFContext &ctx,
                                        Float sample1,
                                        const Point2f &sample2,
                                        Mask active) const {
-        auto [e_val, pdf_val] = eval_pdf(ctx, si, wo, active);
-        auto [bs, bsdf_weight] = sample(ctx, si, sample1, sample2, active);
-        return { e_val, pdf_val, bs, bsdf_weight };
+    auto [e_val, pdf_val] = eval_pdf(ctx, si, wo, active);
+    auto [bs, bsdf_weight] = sample(ctx, si, sample1, sample2, active);
+    return { e_val, pdf_val, bs, bsdf_weight };
 }
 
 MI_VARIANT Spectrum BSDF<Float, Spectrum>::eval_null_transmission(
