@@ -113,9 +113,20 @@ public:
         }
     }
 
+    UnpolarizedSpectrum eval_norm(const SurfaceInteraction3f &si, Mask active) const override {
+        MI_MASKED_FUNCTION(ProfilerPhase::TextureEvaluate, active);
+
+        if constexpr (is_spectral_v<Spectrum>)
+            return m_distr.eval_pdf_normalized(si.wavelengths, active);
+        else {
+            DRJIT_MARK_USED(si);
+            NotImplementedError("pdf");
+        }
+    }
+
     std::pair<Wavelength, UnpolarizedSpectrum> sample_spectrum(const SurfaceInteraction3f & /*si*/,
-                                                      const Wavelength &sample,
-                                                      Mask active) const override {
+                                                               const Wavelength &sample,
+                                                               Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::TextureSample, active);
 
         if constexpr (is_spectral_v<Spectrum>)

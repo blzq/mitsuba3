@@ -122,19 +122,16 @@ public:
         if (unlikely((!has_diffuse && !has_fluoro) || dr::none_or<false>(active)))
             return { bs, 0.f };
 
-        // TODO: This normalisation makes the value too small (?); find a different strategy
-        Float sum = m_fluorescence->sum(); 
-
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = 
-            m_fluorescence->eval(si, active) / m_fluorescence->sum();
+        UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
         
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
-            // TODO: Invalid in RGB case, and poor approximation in spectral case?
-            prob_diffuse = dr::sum(diffuse_value) / dr::sum(diffuse_value + fluoro_value);
+            // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
+            // prob_diffuse = dr::sum(diffuse_value) / dr::sum(diffuse_value + fluoro_value);
+            prob_diffuse = diffuse_value[0] / diffuse_value[0] + fluoro_value[0];
 
         Mask sample_diffuse = active && sample1 < prob_diffuse;
         Mask sample_fluoro = active && !sample_diffuse;
@@ -149,12 +146,15 @@ public:
             dr::masked(bs.sampled_component, sample_diffuse) = 0;
             dr::masked(bs.sampled_type, sample_diffuse) =
                 +BSDFFlags::DiffuseReflection;
+            dr::masked(bs.pdf, sample_diffuse) *= prob_diffuse;
             result[sample_diffuse] = diffuse_value / prob_diffuse;
+            
         }
         if (dr::any_or<true>(sample_fluoro)) {
             dr::masked(bs.sampled_component, sample_fluoro) = 1;
             dr::masked(bs.sampled_type, sample_fluoro) =
                 +BSDFFlags::FluorescentReflection;
+            dr::masked(bs.pdf, sample_fluoro) *= (1.f - prob_diffuse);
             result[sample_fluoro] = fluoro_value / (1.f - prob_diffuse);
         }
 
@@ -203,8 +203,7 @@ public:
             return { 0.f };
 
         UnpolarizedSpectrum value =
-            m_fluorescence->eval(si, active) * dr::InvPi<Float> * cos_theta_o
-            / m_fluorescence->sum();
+            m_fluorescence->eval_norm(si, active) * dr::InvPi<Float> * cos_theta_o;
 
         return depolarizer<Spectrum>(value) & active;
     }
@@ -225,13 +224,14 @@ public:
         Float pdf = warp::square_to_cosine_hemisphere_pdf(wo);
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = m_fluorescence->eval(si, active);
+        UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
+            // m_fluorescence->eval(si, active) / m_fluorescence->sum();
         
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
-            // TODO: Invalid in RGB case, and poor approximation in spectral case?
+            // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
             prob_diffuse = dr::sum(diffuse_value) / dr::sum(diffuse_value + fluoro_value);
 
         return dr::select(cos_theta_i > 0.f && cos_theta_o > 0.f, pdf * prob_diffuse, 0.f);
@@ -255,14 +255,13 @@ public:
             return { 0.f, 0.f };
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = 
-            m_fluorescence->eval(si, active) / m_fluorescence->sum();
+        UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
         
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
-            // TODO: Invalid in RGB case, and poor approximation in spectral case?
+            // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
             prob_diffuse = dr::sum(diffuse_value) / dr::sum(diffuse_value + fluoro_value);
 
         UnpolarizedSpectrum value = diffuse_value * dr::InvPi<Float> * cos_theta_o;
@@ -290,14 +289,13 @@ public:
             return { 0.f, 0.f };
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = 
-            m_fluorescence->eval(si, active) / m_fluorescence->sum();
+        UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
         
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
-            // TODO: Invalid in RGB case, and poor approximation in spectral case?
+            // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
             prob_diffuse = dr::sum(diffuse_value) / dr::sum(diffuse_value + fluoro_value);
 
         UnpolarizedSpectrum value = fluoro_value * dr::InvPi<Float> * cos_theta_o;

@@ -11225,6 +11225,9 @@ Parameter ``si``:
 Returns:
     An trichromatic intensity or reflectance value)doc";
 
+static const char *__doc_mitsuba_Texture_eval_norm =
+R"doc()doc";
+
 static const char *__doc_mitsuba_Texture_is_spatially_varying = R"doc(Does this texture evaluation depend on the UV coordinates)doc";
 
 static const char *__doc_mitsuba_Texture_max =
