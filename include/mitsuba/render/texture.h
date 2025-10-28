@@ -81,6 +81,26 @@ public:
      */
     virtual Wavelength pdf_spectrum(const SurfaceInteraction3f &si,
                                     Mask active = true) const;
+    
+    /**
+     * \brief Equivalent to pdf_spectrum() with a return type of 
+     * UnpolarizedSpectrum, and equivalent to eval() divided by the integral
+     * of the spectrum.
+     * 
+     * Evaluate the density function of the wavelengths in si.wavelengths
+     * as a probability per unit wavelength (in units of 1/nm).
+     *
+     * Not every implementation necessarily overrides this function. The default
+     * implementation throws an exception.
+     *
+     * \param si
+     *     An interaction record describing the associated surface position
+     *
+     * \return
+     *     A density value for each wavelength in <tt>si.wavelengths</tt>
+     */
+    virtual UnpolarizedSpectrum eval_norm(const SurfaceInteraction3f &si,
+                                          Mask active = true) const;
 
     /**
      * \brief Importance sample a surface position proportional to the
@@ -249,6 +269,7 @@ DRJIT_CALL_TEMPLATE_BEGIN(mitsuba::Texture)
     DRJIT_CALL_METHOD(eval)
     DRJIT_CALL_METHOD(sample_spectrum)
     DRJIT_CALL_METHOD(pdf_spectrum)
+    DRJIT_CALL_METHOD(eval_norm)
     DRJIT_CALL_METHOD(sample_position)
     DRJIT_CALL_METHOD(pdf_position)
     DRJIT_CALL_METHOD(eval_1)
