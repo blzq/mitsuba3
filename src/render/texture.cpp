@@ -30,6 +30,11 @@ Texture<Float, Spectrum>::pdf_spectrum(const SurfaceInteraction3f &, Mask) const
     NotImplementedError("pdf_spectrum");
 }
 
+MI_VARIANT typename Texture<Float, Spectrum>::UnpolarizedSpectrum
+Texture<Float, Spectrum>::eval_norm(const SurfaceInteraction3f &, Mask) const {
+    NotImplementedError("eval_norm");
+}
+
 MI_VARIANT Float Texture<Float, Spectrum>::eval_1(const SurfaceInteraction3f &, Mask) const {
     NotImplementedError("eval_1");
 }

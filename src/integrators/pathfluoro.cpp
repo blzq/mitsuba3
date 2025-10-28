@@ -237,14 +237,20 @@ public:
             Float sample_1 = ls.sampler->next_1d();
             Point2f sample_2 = ls.sampler->next_2d();
 
-            auto [bsdf_sample, bsdf_weight]
-                = bsdf->sample(bsdf_ctx, si, sample_1, sample_2);
+            auto [bsdf_sample, bsdf_weight] = 
+                bsdf->sample(bsdf_ctx, si, sample_1, sample_2);
 
-            Mask is_fluoro = has_flag(bsdf_sample.sampled_type, BSDFFlags::FluorescentReflection);
-            SurfaceInteraction3f fluoro_si = si;
+            /* If a fluorescent component is sampled, sample the excitation distribution
+               to shift the wavelength of the incoming ray. The new wavelength is used to
+               sample emitters and for the next ray, but the original wavelength is used
+               to evaluate the fluorescent emission of the hit object itself. */
+            Mask is_fluoro = has_flag(bsdf_sample.sampled_type, 
+                                      BSDFFlags::FluorescentReflection);
+            SurfaceInteraction3f shifted_si = si;
             UnpolarizedSpectrum excite_weight (0.f);
-            std::tie(fluoro_si.wavelengths, excite_weight) = bsdf->sample_excitation(si, sample_1);
-            fluoro_si = dr::select(is_fluoro, fluoro_si, si);
+            std::tie(shifted_si.wavelengths, excite_weight) = 
+                bsdf->sample_excitation(si, sample_1);
+            shifted_si = dr::select(is_fluoro, shifted_si, si);
 
             // ---------------------- Emitter sampling ----------------------
 
@@ -258,14 +264,14 @@ public:
             if (dr::any_or<true>(active_em)) {
                 // Sample the emitter
                 std::tie(ds, em_weight) = scene->sample_emitter_direction(
-                    fluoro_si, ls.sampler->next_2d(), true, active_em);
+                    shifted_si, ls.sampler->next_2d(), true, active_em);
                 active_em &= (ds.pdf != 0.f);
 
                 /* Given the detached emitter sample, recompute its contribution
                    with AD to enable light source optimization. */
                 if (dr::grad_enabled(si.p)) {
                     ds.d = dr::normalize(ds.p - si.p);
-                    Spectrum em_val = scene->eval_emitter_direction(fluoro_si, ds, active_em);
+                    Spectrum em_val = scene->eval_emitter_direction(shifted_si, ds, active_em);
                     em_weight = dr::select(ds.pdf != 0, em_val / ds.pdf, 0);
                 }
 
@@ -302,7 +308,7 @@ public:
 
             bsdf_weight = si.to_world_mueller(bsdf_weight, -bsdf_sample.wo, si.wi);
 
-            ls.ray = fluoro_si.spawn_ray(si.to_world(bsdf_sample.wo));
+            ls.ray = shifted_si.spawn_ray(si.to_world(bsdf_sample.wo));
 
             /* When the path tracer is differentiated, we must be careful that
                the generated Monte Carlo samples are detached (i.e. don't track
@@ -328,10 +334,10 @@ public:
             ls.throughput *= bsdf_weight;
             ls.eta *= bsdf_sample.eta;
             ls.valid_ray |= ls.active && si.is_valid() &&
-                         !has_flag(bsdf_sample.sampled_type, BSDFFlags::Null);
+                            !has_flag(bsdf_sample.sampled_type, BSDFFlags::Null);
 
             // Information about the current vertex needed by the next iteration
-            ls.prev_si = Interaction3f(fluoro_si);
+            ls.prev_si = Interaction3f(shifted_si);
             ls.prev_bsdf_pdf = bsdf_sample.pdf;
             ls.prev_bsdf_delta = has_flag(bsdf_sample.sampled_type, BSDFFlags::Delta);
 
