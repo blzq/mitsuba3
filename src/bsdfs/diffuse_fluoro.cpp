@@ -130,8 +130,7 @@ public:
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
             // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
-            // prob_diffuse = dr::sum(diffuse_value) / dr::sum(diffuse_value + fluoro_value);
-            prob_diffuse = diffuse_value[0] / diffuse_value[0] + fluoro_value[0];
+            prob_diffuse = dr::sum(diffuse_value / (diffuse_value + fluoro_value));
 
         Mask sample_diffuse = active && sample1 < prob_diffuse;
         Mask sample_fluoro = active && !sample_diffuse;
@@ -232,7 +231,7 @@ public:
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
             // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
-            prob_diffuse = dr::sum(diffuse_value) / dr::sum(diffuse_value + fluoro_value);
+            prob_diffuse = dr::sum(diffuse_value / (diffuse_value + fluoro_value));
 
         return dr::select(cos_theta_i > 0.f && cos_theta_o > 0.f, pdf * prob_diffuse, 0.f);
     }
@@ -262,7 +261,7 @@ public:
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
             // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
-            prob_diffuse = dr::sum(diffuse_value) / dr::sum(diffuse_value + fluoro_value);
+            prob_diffuse = dr::sum(diffuse_value / (diffuse_value + fluoro_value));
 
         UnpolarizedSpectrum value = diffuse_value * dr::InvPi<Float> * cos_theta_o;
 
@@ -296,7 +295,7 @@ public:
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
             // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
-            prob_diffuse = dr::sum(diffuse_value) / dr::sum(diffuse_value + fluoro_value);
+            prob_diffuse = dr::sum(diffuse_value / (diffuse_value + fluoro_value));
 
         UnpolarizedSpectrum value = fluoro_value * dr::InvPi<Float> * cos_theta_o;
 
