@@ -121,7 +121,7 @@ public:
 
     Float mean() const override { return m_value; }
 
-    Float sum() const override { return 1.f; }
+    Float sum() const override { return m_value * (m_range.y() - m_range.x()); }
 
     ScalarVector2f wavelength_range() const override {
         return m_range;
