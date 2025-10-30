@@ -147,7 +147,6 @@ public:
                 +BSDFFlags::DiffuseReflection;
             dr::masked(bs.pdf, sample_diffuse) *= prob_diffuse;
             result[sample_diffuse] = diffuse_value / prob_diffuse;
-            
         }
         if (dr::any_or<true>(sample_fluoro)) {
             dr::masked(bs.sampled_component, sample_fluoro) = 1;
@@ -162,7 +161,9 @@ public:
 
     std::pair<Wavelength, UnpolarizedSpectrum> sample_excitation(
         const SurfaceInteraction3f &si, Float sample, Mask active) const override {
-        return m_excitation->sample_spectrum(si, Wavelength(sample), active);
+        return m_excitation->sample_spectrum(si,
+                                             math::sample_shifted<Wavelength>(sample),
+                                             active);
     };
 
     Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
