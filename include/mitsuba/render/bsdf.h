@@ -635,8 +635,8 @@ public:
 
     /**
      * \brief For fluorescent (wavelength-shifting) materials, samples a
-     * random wavelength, associated excitation value, and associated Monte Carlo
-     * importance weight in order to decide the wavelength and strength
+     * random wavelength, associated excitation value, and associated Monte 
+     * Carlo importance weight in order to decide the wavelength and strength
      * of incoming excitation radiation.
      *
      * For non-fluorescent materials, it should return the original wavelength
@@ -650,6 +650,11 @@ public:
      * \param sample
      *     A uniformly distributed sample on \f$[0,1]\f$. It is used
      *     to select a random wavelength.
+     * \return
+     *     1. Set of sampled wavelengths specified in nanometers
+     *
+     *     2. The Monte Carlo importance weight (Spectral power distribution
+     *        of excitation value divided by the sampling density)
      */
     virtual std::pair<Wavelength, UnpolarizedSpectrum>
     sample_excitation(const SurfaceInteraction3f &si,
