@@ -63,7 +63,7 @@ enum class BSDFFlags : uint32_t {
     /// Transmission into a 1D space of directions
     Delta1DTransmission  = 0x00100,
 
-    /// Fluorescent ideally Diffuse reflection
+    /// Fluorescent ideally diffuse reflection
     FluorescentReflection = 0x00200,
 
     // =============================================================
@@ -448,7 +448,7 @@ public:
                                                 Mask active = true) const;
 
     /**
-     * \brief Equivalent to eval_pdf(), but only includes fluorescent contribution
+     * \brief Similar to eval_pdf(), but only includes fluorescent contribution
      * to the evaluated value. This must be handled separately as the incident
      * light will be wavelength shifted in the fluorescent case but not in the
      * usual reflection case.
