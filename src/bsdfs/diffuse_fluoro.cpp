@@ -8,9 +8,9 @@ NAMESPACE_BEGIN(mitsuba)
 
 /**!
 
-.. _bsdf-diffuse:
+.. _bsdf-diffusefluoro:
 
-Smooth diffuse material (:monosp:`diffuse`)
+Fluorescent diffuse material (:monosp:`diffusefluoro`)
 -------------------------------------------
 
 .. pluginparameters::
@@ -19,66 +19,57 @@ Smooth diffuse material (:monosp:`diffuse`)
    - |spectrum| or |texture|
    - Specifies the diffuse albedo of the material (Default: 0.5)
    - |exposed|, |differentiable|
+ * - fluorescence
+   - |spectrum| or |texture|
+   - Specifies the fluorescent emission albedo of the material (Default: 0.5)
+   - |exposed|, |differentiable|
+ * - excitation
+   - |spectrum| or |texture|
+   - Specifies the fluorescent excitation spectrum of the material (Default: 0.0)
+   - |exposed|, |differentiable|
 
-The smooth diffuse material (also referred to as *Lambertian*)
-represents an ideally diffuse material with a user-specified amount of
-reflectance. Any received illumination is scattered so that the surface
-looks the same independently of the direction of observation.
+The fluorescent diffuse material represents an ideally diffuse (Lambertian)
+material with reflectance and fluorescence components. Received illumination
+is scattered so it looks the same independently of the direction of observation.
+However, an incoming wavelength that is non-zero in the excitation spectrum has
+a probability to be wavelength-shifted and re-emitted as one of the wavelengths
+in the fluorescent emission spectrum.
 
-.. subfigstart::
-.. subfigure:: ../../resources/data/docs/images/render/bsdf_diffuse_plain.jpg
-   :caption: Homogeneous reflectance
-.. subfigure:: ../../resources/data/docs/images/render/bsdf_diffuse_textured.jpg
-   :caption: Textured reflectance
-.. subfigend::
-   :label: fig-diffuse
+When using this plugin, you *must* enable one of the :monosp:`spectral` modes
+of the renderer, as an error will be thrown otherwise. Also, to observe
+fluorescent effects, a fluorescent-enabled integrator must be used.
 
-Apart from a homogeneous reflectance value, the plugin can also accept
-a nested or referenced texture map to be used as the source of reflectance
-information, which is then mapped onto the shape based on its UV
-parameterization. When no parameters are specified, the model uses the default
-of 50% reflectance.
-
-Note that this material is one-sided---that is, observed from the
+Also note that this material is one-sided---that is, observed from the
 back side, it will be completely black. If this is undesirable,
 consider using the :ref:`twosided <bsdf-twosided>` BRDF adapter plugin.
-The following XML snippet describes a diffuse material,
-whose reflectance is specified as an sRGB color:
 
 .. tabs::
     .. code-tab:: xml
-        :name: diffuse-srgb
+        :name: diffuse-fluoro-spectral
 
-        <bsdf type="diffuse">
-            <rgb name="reflectance" value="0.2, 0.25, 0.7"/>
+        <bsdf type="diffusefluoro">
+            <spectrum name="reflectance" value="400:0.0, 500:0.3, 600:0.6, 700:0.0" /> 
+		    <spectrum name="fluorescence" value="500:0.0, 600:0.5, 700:0.5" />
+		    <spectrum name="excitation" value="400:0.4, 500:0.0" />
         </bsdf>
 
     .. code-tab:: python
 
-        'type': 'diffuse',
+        'type': 'diffusefluoro',
         'reflectance': {
-            'type': 'rgb',
-            'value': [0.2, 0.25, 0.7]
-        }
-
-Alternatively, the reflectance can be textured:
-
-.. tabs::
-    .. code-tab:: xml
-        :name: diffuse-texture
-
-        <bsdf type="diffuse">
-            <texture type="bitmap" name="reflectance">
-                <string name="filename" value="wood.jpg"/>
-            </texture>
-        </bsdf>
-
-    .. code-tab:: python
-
-        'type': 'diffuse',
-        'reflectance': {
-            'type': 'bitmap',
-            'filename': 'wood.jpg'
+            'type': 'irregular',
+            'wavelengths': '400, 500, 600, 700',
+            'values': '0.0, 0.3, 0.6, 0.0'
+        },
+        'fluorescence': {
+            'type': 'irregular',
+            'wavelengths': '500, 600, 700',
+            'values': '0.0, 0.5, 0.5'
+        },
+        'excitation': {
+            'type': 'irregular',
+            'wavelengths': '400, 500',
+            'values': '0.4, 0.0'
         }
 */
 template <typename Float, typename Spectrum>
@@ -88,6 +79,10 @@ public:
     MI_IMPORT_TYPES(Texture)
 
     SmoothDiffuseFluoro(const Properties &props) : Base(props) {
+        if constexpr (!is_spectral_v<Spectrum>) {
+            Log(Error, "This BRDF can only be used in Mitsuba variants that "
+                       "perform a spectral simulation.");
+        }
         m_reflectance = props.get_texture<Texture>("reflectance", .5f);
         m_fluorescence = props.get_texture<Texture>("fluorescence", .5f);
         m_excitation = props.get_texture<Texture>("excitation", 0.0f);
