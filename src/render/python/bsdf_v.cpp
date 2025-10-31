@@ -53,12 +53,12 @@ public:
         NB_OVERRIDE_PURE(eval, ctx, si, wo, active);
     }
 
-    // Spectrum eval_fluoro(const BSDFContext &ctx,
-    //                      const SurfaceInteraction3f &si,
-    //                      const Vector3f &wo,
-    //                      Mask active) const override {
-    //     NB_OVERRIDE_PURE(eval_fluoro, ctx, si, wo, active);
-    // }
+    Spectrum eval_fluoro(const BSDFContext &ctx,
+                         const SurfaceInteraction3f &si,
+                         const Vector3f &wo,
+                         Mask active) const override {
+        NB_OVERRIDE_PURE(eval_fluoro, ctx, si, wo, active);
+    }
 
     Float pdf(const BSDFContext &ctx,
               const SurfaceInteraction3f &si,
