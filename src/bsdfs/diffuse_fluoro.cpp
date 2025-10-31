@@ -48,7 +48,7 @@ consider using the :ref:`twosided <bsdf-twosided>` BRDF adapter plugin.
         :name: diffuse-fluoro-spectral
 
         <bsdf type="diffusefluoro">
-            <spectrum name="reflectance" value="400:0.0, 500:0.3, 600:0.6, 700:0.0" /> 
+            <spectrum name="reflectance" value="400:0.0, 500:0.3, 600:0.6, 700:0.0" />
 		    <spectrum name="fluorescence" value="500:0.0, 600:0.5, 700:0.5" />
 		    <spectrum name="excitation" value="400:0.4, 500:0.0" />
         </bsdf>
@@ -119,13 +119,13 @@ public:
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
         UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
-        
+
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
-            // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
-            prob_diffuse = dr::sum(diffuse_value / (diffuse_value + fluoro_value));
+            // TODO: bad approximation (?) when the number of wavelengths per ray > 1
+            prob_diffuse = dr::mean(diffuse_value / (diffuse_value + fluoro_value + dr::Epsilon<Float>));
 
         Mask sample_diffuse = active && sample1 < prob_diffuse;
         Mask sample_fluoro = active && !sample_diffuse;
@@ -220,14 +220,13 @@ public:
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
         UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
-            // m_fluorescence->eval(si, active) / m_fluorescence->sum();
-        
+
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
-            // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
-            prob_diffuse = dr::sum(diffuse_value / (diffuse_value + fluoro_value));
+            // TODO: bad approximation (?) when the number of wavelengths per ray > 1
+            prob_diffuse = dr::mean(diffuse_value / (diffuse_value + fluoro_value + dr::Epsilon<Float>));
 
         return dr::select(cos_theta_i > 0.f && cos_theta_o > 0.f, pdf * prob_diffuse, 0.f);
     }
@@ -251,13 +250,13 @@ public:
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
         UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
-        
+
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
-            // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
-            prob_diffuse = dr::sum(diffuse_value / (diffuse_value + fluoro_value));
+            // TODO: bad approximation (?) when the number of wavelengths per ray > 1
+            prob_diffuse = dr::mean(diffuse_value / (diffuse_value + fluoro_value + dr::Epsilon<Float>));
 
         UnpolarizedSpectrum value = diffuse_value * dr::InvPi<Float> * cos_theta_o;
 
@@ -285,13 +284,13 @@ public:
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
         UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
-        
+
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
-            // TODO: Invalid in RGB case, and invalid in spectral case with >1 wavelength per ray
-            prob_diffuse = dr::sum(diffuse_value / (diffuse_value + fluoro_value));
+            // TODO: bad approximation (?) when the number of wavelengths per ray > 1
+            prob_diffuse = dr::mean(diffuse_value / (diffuse_value + fluoro_value + dr::Epsilon<Float>));
 
         UnpolarizedSpectrum value = fluoro_value * dr::InvPi<Float> * cos_theta_o;
 
