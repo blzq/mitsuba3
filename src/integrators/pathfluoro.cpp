@@ -9,9 +9,9 @@ NAMESPACE_BEGIN(mitsuba)
 
 /**!
 
-.. _integrator-path:
+.. _integrator-pathfluoro:
 
-Path tracer (:monosp:`path`)
+Path tracer with fluorescence (:monosp:`pathfluoro`)
 ----------------------------
 
 .. pluginparameters::
@@ -34,32 +34,15 @@ Path tracer (:monosp:`path`)
    - |bool|
    - Hide directly visible emitters. (Default: no, i.e. |false|)
 
-This integrator implements a basic path tracer and is a **good default choice**
-when there is no strong reason to prefer another method.
+This integrator is based on the standard path tracer, but supports fluorescent
+(wavelength-shifting) BRDFs.
 
-To use the path tracer appropriately, it is instructive to know roughly how
-it works: its main operation is to trace many light paths using *random walks*
-starting from the sensor. A single random walk is shown below, which entails
-casting a ray associated with a pixel in the output image and searching for
-the first visible intersection. A new direction is then chosen at the intersection,
-and the ray-casting step repeats over and over again (until one of several
-stopping criteria applies).
-
-.. image:: ../../resources/data/docs/images/integrator/integrator_path_figure.png
-    :width: 95%
-    :align: center
-
-At every intersection, the path tracer tries to create a connection to
-the light source in an attempt to find a *complete* path along which
-light can flow from the emitter to the sensor. This of course only works
-when there is no occluding object between the intersection and the emitter.
-
-This directly translates into a category of scenes where a path tracer can be
-expected to produce reasonable results: this is the case when the emitters are
-easily "accessible" by the contents of the scene. For instance, an interior
-scene that is lit by an area light will be considerably harder to render when
-this area light is inside a glass enclosure (which effectively counts as an
-occluder).
+Compared to the standard path tracer, at every intersection, this integrator
+implementation additionally tests if the interaction between light and material
+was fluorescent. If so, the integrator applies a wavelength shift to the next
+ray, with the new wavelength sampled from the material's excitation spectrum.
+The new wavelength is also used to sample scene emitters. However, the spectral
+appearance of the object is determined by interaction with the original wavelength.
 
 Like the :ref:`direct <integrator-direct>` plugin, the path tracer internally
 relies on multiple importance sampling to combine BSDF and emitter samples. The
@@ -70,15 +53,15 @@ paths of arbitrary length to compute both direct and indirect illumination.
 
 .. tabs::
     .. code-tab::  xml
-        :name: path-integrator
+        :name: pathfluoro-integrator
 
-        <integrator type="path">
+        <integrator type="pathfluoro">
             <integer name="max_depth" value="8"/>
         </integrator>
 
     .. code-tab:: python
 
-        'type': 'path',
+        'type': 'pathfluoro',
         'max_depth': 8
 
  */
@@ -89,7 +72,12 @@ public:
     MI_IMPORT_BASE(MonteCarloIntegrator, m_max_depth, m_rr_depth, m_hide_emitters)
     MI_IMPORT_TYPES(Scene, Sampler, Medium, Emitter, EmitterPtr, BSDF, BSDFPtr)
 
-    PathFluoroIntegrator(const Properties &props) : Base(props) { }
+    PathFluoroIntegrator(const Properties &props) : Base(props) {
+        if constexpr (!is_spectral_v<Spectrum>) {
+            Log(Error, "This integrator can only be used in Mitsuba variants that "
+                       "perform a spectral simulation.");
+        }
+    }
 
     std::pair<Spectrum, Bool> sample(const Scene *scene,
                                      Sampler *sampler,
@@ -233,30 +221,30 @@ public:
             BSDFPtr bsdf = si.bsdf(ls.ray);
 
             /* Separate sample() from eval_pdf() to before emitter sampling
-               to decide if the interaction should be wavelength-shifting 
+               to decide if the interaction should be wavelength-shifting
                i.e. fluorescent */
             Float sample_1 = ls.sampler->next_1d();
             Point2f sample_2 = ls.sampler->next_2d();
 
-            auto [bsdf_sample, bsdf_weight] = 
+            auto [bsdf_sample, bsdf_weight] =
                 bsdf->sample(bsdf_ctx, si, sample_1, sample_2);
 
-            /* If a fluorescent component is sampled, sample the excitation 
-               distribution to shift the wavelength of the incoming ray. The 
+            /* If a fluorescent component is sampled, sample the excitation
+               distribution to shift the wavelength of the incoming ray. The
                new wavelength is used to sample emitters and for the next ray,
-               but the original wavelength is used to evaluate the fluorescent 
+               but the original wavelength is used to evaluate the fluorescent
                emission of the hit object itself. */
-            Mask is_fluoro = has_flag(bsdf_sample.sampled_type, 
+            Mask is_fluoro = has_flag(bsdf_sample.sampled_type,
                                       BSDFFlags::FluorescentReflection);
             SurfaceInteraction3f shifted_si = si;
             UnpolarizedSpectrum excite_weight (0.f);
-            std::tie(shifted_si.wavelengths, excite_weight) = 
+            std::tie(shifted_si.wavelengths, excite_weight) =
                 bsdf->sample_excitation(si, sample_1);
             shifted_si = dr::select(is_fluoro, shifted_si, si);
             /* For fluorescent materials, the fluorescent emission distribution
-               is normalised to have a unit integral, while the excitation 
-               distribution represents the proportion of the incoming energy 
-               that is re-emitted. So, the BSDF weight needs to be multiplied 
+               is normalised to have a unit integral, while the excitation
+               distribution represents the proportion of the incoming energy
+               that is re-emitted. So, the BSDF weight needs to be multiplied
                by the excitation weight. */
             bsdf_weight = dr::select(is_fluoro, bsdf_weight * excite_weight, bsdf_weight);
 

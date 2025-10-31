@@ -870,6 +870,8 @@ static const char *__doc_mitsuba_BSDFFlags_DiffuseTransmission = R"doc(Ideally d
 
 static const char *__doc_mitsuba_BSDFFlags_Empty = R"doc(No flags set (default value))doc";
 
+static const char *__doc_mitsuba_BSDFFlags_FluorescentReflection = R"doc(Fluorescent ideally diffuse reflection)doc";
+
 static const char *__doc_mitsuba_BSDFFlags_FrontSide = R"doc(Supports interactions on the front-facing side)doc";
 
 static const char *__doc_mitsuba_BSDFFlags_Glossy = R"doc(Non-diffuse scattering into a 2D set of directions)doc";

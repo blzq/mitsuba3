@@ -19,6 +19,7 @@ MI_PY_EXPORT(BSDFContext) {
         .def_value(BSDFFlags, GlossyTransmission)
         .def_value(BSDFFlags, DeltaReflection)
         .def_value(BSDFFlags, DeltaTransmission)
+        .def_value(BSDFFlags, FluorescentReflection)
         .def_value(BSDFFlags, Anisotropic)
         .def_value(BSDFFlags, SpatiallyVarying)
         .def_value(BSDFFlags, NonSymmetric)
