@@ -86,9 +86,10 @@ public:
         NB_OVERRIDE(eval_diffuse_reflectance, si, active);
     }
 
-    std::pair<Wavelength, UnpolarizedSpectrum> sample_excitation(
-        const SurfaceInteraction3f &si, Float sample, Mask active) const override {
-        NB_OVERRIDE(sample_excitation, si, sample, active);
+    std::pair<Wavelength, UnpolarizedSpectrum> sample_wavelength_shift(
+        const BSDFContext &ctx, const SurfaceInteraction3f &si, 
+        Float sample, Mask active) const override {
+        NB_OVERRIDE(sample_wavelength_shift, ctx, si, sample, active);
     }
 
     Spectrum eval_null_transmission(const SurfaceInteraction3f &si,
@@ -179,10 +180,11 @@ template <typename Ptr, typename Cls> void bind_bsdf_generic(Cls &cls) {
              [](Ptr bsdf, const SurfaceInteraction3f &si, Mask active) {
                  return bsdf->eval_diffuse_reflectance(si, active);
              }, "si"_a, "active"_a = true, D(BSDF, eval_diffuse_reflectance))
-        .def("sample_excitation",
-             [](Ptr bsdf, const SurfaceInteraction3f &si, Float sample, Mask active) {
-                 return bsdf->sample_excitation(si, sample, active);
-             }, "si"_a, "sample"_a, "active"_a = true, D(BSDF, sample_excitation))
+        .def("sample_wavelength_shift",
+             [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
+                Float sample,
+                Mask active) { return bsdf->sample_wavelength_shift(ctx, si, sample, active);
+             }, "ctx"_a, "si"_a, "sample"_a, "active"_a = true, D(BSDF, sample_wavelength_shift))
         .def("has_attribute",
             [](Ptr bsdf, const std::string &name, const Mask &active) {
                 return bsdf->has_attribute(name, active);
