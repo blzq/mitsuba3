@@ -60,9 +60,10 @@ MI_VARIANT Spectrum BSDF<Float, Spectrum>::eval_diffuse_reflectance(
 
 MI_VARIANT std::pair<typename BSDF<Float, Spectrum>::Wavelength, 
                      typename BSDF<Float, Spectrum>::UnpolarizedSpectrum> 
-BSDF<Float, Spectrum>::sample_excitation(const SurfaceInteraction3f &si, 
-                                         Float /* sample */, 
-                                         Mask active) const {
+BSDF<Float, Spectrum>::sample_wavelength_shift(const BSDFContext & /* ctx */,
+                                               const SurfaceInteraction3f &si,
+                                               Float /* sample */, 
+                                               Mask active) const {
     return { si.wavelengths, UnpolarizedSpectrum(1.f) && active };
 };
 

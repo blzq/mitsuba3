@@ -382,22 +382,23 @@ public:
         }
     }
 
-    std::pair<Wavelength, UnpolarizedSpectrum> sample_excitation(
-        const SurfaceInteraction3f &si, Float sample, Mask active) const override {
+    std::pair<Wavelength, UnpolarizedSpectrum> sample_wavelength_shift(
+        const BSDFContext &ctx, const SurfaceInteraction3f &si, 
+        Float sample, Mask active) const override {
 
         if (m_brdf[0] == m_brdf[1]) {
-            return m_brdf[0]->sample_excitation(si, sample, active);
+            return m_brdf[0]->sample_wavelength_shift(ctx, si, sample, active);
         } else {
             std::pair<Wavelength, UnpolarizedSpectrum> result;
             Mask front_side = Frame3f::cos_theta(si.wi) > 0.f && active,
                  back_side  = Frame3f::cos_theta(si.wi) < 0.f && active;
 
             if (dr::any_or<true>(front_side))
-                result = m_brdf[0]->sample_excitation(si, sample, front_side);
+                result = m_brdf[0]->sample_wavelength_shift(ctx, si, sample, front_side);
 
             if (dr::any_or<true>(back_side)) {
                 dr::masked(result, back_side) =
-                    m_brdf[1]->sample_excitation(si, sample, back_side);
+                    m_brdf[1]->sample_wavelength_shift(ctx, si, sample, back_side);
             }
 
             return result;
