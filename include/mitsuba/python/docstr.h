@@ -1217,8 +1217,7 @@ Returns:
       component is sampled). A zero spectrum indicates that sampling
       failed.)doc";
 
-static const char *__doc_mitsuba_BSDF_sample_excitation =
-R"doc(
+static const char *__doc_mitsuba_BSDF_sample_wavelength_shift = R"doc(
 )doc";
 
 static const char *__doc_mitsuba_BSDF_sh_frame =
