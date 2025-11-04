@@ -277,8 +277,9 @@ public:
                m_nested_bsdf[1]->eval_diffuse_reflectance(si, active) * weight;
     }
 
-    std::pair<Wavelength, UnpolarizedSpectrum> sample_excitation(
-        const SurfaceInteraction3f &si, Float sample, Mask active) const override {
+    std::pair<Wavelength, UnpolarizedSpectrum> sample_wavelength_shift(
+        const BSDFContext &ctx, const SurfaceInteraction3f &si, 
+        Float sample, Mask active) const override {
         Float weight = eval_weight(si, active);
 
         std::pair<Wavelength, UnpolarizedSpectrum> result;
@@ -287,11 +288,13 @@ public:
              m1 = active && sample <= weight;
 
         if (dr::any_or<true>(m0)) {
-            dr::masked(result, m0) = m_nested_bsdf[0]->sample_excitation(si, sample, m0);
+            dr::masked(result, m0) =
+                m_nested_bsdf[0]->sample_wavelength_shift(ctx, si, sample, m0);
         }
 
         if (dr::any_or<true>(m1)) {
-            dr::masked(result, m1) = m_nested_bsdf[1]->sample_excitation(si, sample, m1);
+            dr::masked(result, m1) =
+                m_nested_bsdf[1]->sample_wavelength_shift(ctx, si, sample, m1);
         }
 
         return result;

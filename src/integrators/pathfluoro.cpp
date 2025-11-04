@@ -239,7 +239,7 @@ public:
             SurfaceInteraction3f shifted_si = si;
             UnpolarizedSpectrum excite_weight (0.f);
             std::tie(shifted_si.wavelengths, excite_weight) =
-                bsdf->sample_excitation(si, sample_1);
+                bsdf->sample_wavelength_shift(bsdf_ctx, si, sample_1);
             shifted_si = dr::select(is_fluoro, shifted_si, si);
             /* For fluorescent materials, the fluorescent emission distribution
                is normalised to have a unit integral, while the excitation
