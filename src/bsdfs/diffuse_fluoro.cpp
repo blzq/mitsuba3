@@ -83,9 +83,9 @@ public:
             Log(Error, "This BRDF can only be used in Mitsuba variants that "
                        "perform a spectral simulation.");
         }
-        m_reflectance = props.get_texture<Texture>("reflectance", .5f);
+        m_reflectance = props.get_texture<Texture>("reflectance", 0.f);
         m_fluorescence = props.get_texture<Texture>("fluorescence", .5f);
-        m_excitation = props.get_texture<Texture>("excitation", 0.0f);
+        m_excitation = props.get_texture<Texture>("excitation", 0.5f);
 
         m_components.push_back(BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide);
         m_components.push_back(BSDFFlags::FluorescentReflection | BSDFFlags::FrontSide);
@@ -118,7 +118,9 @@ public:
             return { bs, 0.f };
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
+        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance 
+            ? m_fluorescence->eval_norm(si, active) 
+            : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
@@ -154,11 +156,12 @@ public:
         return { bs, depolarizer<Spectrum>(result) & (active && bs.pdf > 0.f) };
     }
 
-    std::pair<Wavelength, UnpolarizedSpectrum> sample_excitation(
-        const SurfaceInteraction3f &si, Float sample, Mask active) const override {
-        return m_excitation->sample_spectrum(si,
-                                             math::sample_shifted<Wavelength>(sample),
-                                             active);
+    std::pair<Wavelength, UnpolarizedSpectrum> sample_wavelength_shift(
+        const BSDFContext &ctx, const SurfaceInteraction3f &si, 
+        Float sample, Mask active) const override {
+        auto spectrum = ctx.mode == TransportMode::Radiance ? m_excitation : m_fluorescence;
+        return spectrum->sample_spectrum(
+            si, math::sample_shifted<Wavelength>(sample), active);
     };
 
     Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
@@ -197,8 +200,11 @@ public:
         if (unlikely(!has_fluoro || dr::none_or<false>(active)))
             return { 0.f };
 
-        UnpolarizedSpectrum value =
-            m_fluorescence->eval_norm(si, active) * dr::InvPi<Float> * cos_theta_o;
+        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance 
+            ? m_fluorescence->eval_norm(si, active) 
+            : m_excitation->eval(si, active);
+
+        UnpolarizedSpectrum value = fluoro_value * dr::InvPi<Float> * cos_theta_o;
 
         return depolarizer<Spectrum>(value) & active;
     }
@@ -219,7 +225,9 @@ public:
         Float pdf = warp::square_to_cosine_hemisphere_pdf(wo);
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
+        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance 
+            ? m_fluorescence->eval_norm(si, active) 
+            : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
@@ -249,7 +257,9 @@ public:
             return { 0.f, 0.f };
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
+        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance 
+            ? m_fluorescence->eval_norm(si, active) 
+            : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
@@ -283,7 +293,9 @@ public:
             return { 0.f, 0.f };
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = m_fluorescence->eval_norm(si, active);
+        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance 
+            ? m_fluorescence->eval_norm(si, active) 
+            : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
         if (unlikely(has_fluoro != has_diffuse))
