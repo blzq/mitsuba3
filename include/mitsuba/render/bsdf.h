@@ -635,9 +635,10 @@ public:
 
     /**
      * \brief For fluorescent (wavelength-shifting) materials, samples a
-     * random wavelength, associated excitation value, and associated Monte 
-     * Carlo importance weight in order to decide the wavelength and strength
-     * of incoming excitation radiation.
+     * random wavelength, associated excitation or fluorescence value, and 
+     * associated Monte Carlo importance weight in order to decide the 
+     * wavelength and strength of incoming excitation radiation or outgoing
+     * fluorescent radiation.
      *
      * For non-fluorescent materials, it should return the original wavelength
      * and a weight of 1, which is the default behaviour.
@@ -657,9 +658,10 @@ public:
      *        of excitation value divided by the sampling density)
      */
     virtual std::pair<Wavelength, UnpolarizedSpectrum>
-    sample_excitation(const SurfaceInteraction3f &si,
-                      Float sample,
-                      Mask active = true) const;
+    sample_wavelength_shift(const BSDFContext &ctx,
+                            const SurfaceInteraction3f &si,
+                            Float sample,
+                            Mask active = true) const;
 
     /**
      * \brief Returns the shading frame accounting for any pertubations that may
@@ -742,7 +744,6 @@ NAMESPACE_END(mitsuba)
 
 DRJIT_CALL_TEMPLATE_BEGIN(mitsuba::BSDF)
     DRJIT_CALL_METHOD(sample)
-    DRJIT_CALL_METHOD(sample_excitation)
     DRJIT_CALL_METHOD(eval)
     DRJIT_CALL_METHOD(eval_fluoro)
     DRJIT_CALL_METHOD(eval_null_transmission)
@@ -751,6 +752,7 @@ DRJIT_CALL_TEMPLATE_BEGIN(mitsuba::BSDF)
     DRJIT_CALL_METHOD(eval_pdf_fluoro)
     DRJIT_CALL_METHOD(eval_pdf_sample)
     DRJIT_CALL_METHOD(eval_diffuse_reflectance)
+    DRJIT_CALL_METHOD(sample_wavelength_shift)
     DRJIT_CALL_METHOD(has_attribute)
     DRJIT_CALL_METHOD(eval_attribute)
     DRJIT_CALL_METHOD(eval_attribute_1)
