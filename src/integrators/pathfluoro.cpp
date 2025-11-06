@@ -231,22 +231,25 @@ public:
 
             /* If a fluorescent component is sampled, sample the excitation
                distribution to shift the wavelength of the incoming ray. The
-               new wavelength is used to sample emitters and for the next ray,
-               but the original wavelength is used to evaluate the fluorescent
-               emission of the hit object itself. */
+               new wavelength is used to sample emitters and when generating
+               the next ray, but the original wavelength is used to evaluate
+               the fluorescent emission of the hit object itself. */
             Mask is_fluoro = has_flag(bsdf_sample.sampled_type,
                                       BSDFFlags::FluorescentReflection);
             SurfaceInteraction3f shifted_si = si;
-            UnpolarizedSpectrum excite_weight (0.f);
-            std::tie(shifted_si.wavelengths, excite_weight) =
-                bsdf->sample_wavelength_shift(bsdf_ctx, si, sample_1);
-            shifted_si = dr::select(is_fluoro, shifted_si, si);
+            UnpolarizedSpectrum excite_weight (1.f);
+            if (dr::any_or<true>(is_fluoro)) {
+                auto [fluoro_wavelengths, fluoro_weight] =
+                    bsdf->sample_wavelength_shift(bsdf_ctx, si, sample_1);
+                dr::masked(shifted_si.wavelengths, is_fluoro) = fluoro_wavelengths;
+                dr::masked(excite_weight,          is_fluoro) = fluoro_weight;
+            }
             /* For fluorescent materials, the fluorescent emission distribution
                is normalised to have a unit integral, while the excitation
                distribution represents the proportion of the incoming energy
                that is re-emitted. So, the BSDF weight needs to be multiplied
                by the excitation weight. */
-            bsdf_weight = dr::select(is_fluoro, bsdf_weight * excite_weight, bsdf_weight);
+            bsdf_weight = bsdf_weight * excite_weight;
 
             // ---------------------- Emitter sampling ----------------------
 
@@ -292,11 +295,8 @@ public:
                     dr::select(ds.delta, 1.f, mis_weight(ds.pdf, bsdf_pdf));
 
                 // Accumulate, being careful with polarization (see spec_fma)
-                Spectrum value = dr::select(
-                    is_fluoro,
-                    excite_weight * bsdf_val * em_weight * mis_em,
-                    bsdf_val * em_weight * mis_em
-                );
+                Spectrum value = excite_weight * bsdf_val * em_weight * mis_em;
+
                 ls.result[active_em] = spec_fma(ls.throughput, value, ls.result);
             }
 
