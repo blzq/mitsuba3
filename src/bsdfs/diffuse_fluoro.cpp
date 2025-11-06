@@ -35,6 +35,12 @@ However, an incoming wavelength that is non-zero in the excitation spectrum has
 a probability to be wavelength-shifted and re-emitted as one of the wavelengths
 in the fluorescent emission spectrum.
 
+Note that the input fluorescent emission spectrum will be normalised to have
+a unit integral. This means that to increase the strength of fluorescent emission,
+the excitation value should be increased instead. For energy conservation, the
+sum of the excitation and reflectance spectra should not exceed 1.0 at any point
+in the wavelength domain.
+
 When using this plugin, you *must* enable one of the :monosp:`spectral` modes
 of the renderer, as an error will be thrown otherwise. Also, to observe
 fluorescent effects, a fluorescent-enabled integrator must be used.
@@ -118,8 +124,8 @@ public:
             return { bs, 0.f };
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance 
-            ? m_fluorescence->eval_norm(si, active) 
+        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance
+            ? m_fluorescence->eval_norm(si, active)
             : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
@@ -157,11 +163,16 @@ public:
     }
 
     std::pair<Wavelength, UnpolarizedSpectrum> sample_wavelength_shift(
-        const BSDFContext &ctx, const SurfaceInteraction3f &si, 
+        const BSDFContext &ctx, const SurfaceInteraction3f &si,
         Float sample, Mask active) const override {
-        auto spectrum = ctx.mode == TransportMode::Radiance ? m_excitation : m_fluorescence;
-        return spectrum->sample_spectrum(
+        float radiance_mode = ctx.mode == TransportMode::Radiance;
+
+        auto spectrum = radiance_mode ? m_excitation : m_fluorescence;
+        auto [wavelengths, weight] = spectrum->sample_spectrum(
             si, math::sample_shifted<Wavelength>(sample), active);
+
+        // The emission spectrum should have integral normalised to 1
+        return { wavelengths, radiance_mode ? weight : weight / spectrum->sum() };
     };
 
     Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
@@ -200,8 +211,8 @@ public:
         if (unlikely(!has_fluoro || dr::none_or<false>(active)))
             return { 0.f };
 
-        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance 
-            ? m_fluorescence->eval_norm(si, active) 
+        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance
+            ? m_fluorescence->eval_norm(si, active)
             : m_excitation->eval(si, active);
 
         UnpolarizedSpectrum value = fluoro_value * dr::InvPi<Float> * cos_theta_o;
@@ -225,8 +236,8 @@ public:
         Float pdf = warp::square_to_cosine_hemisphere_pdf(wo);
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance 
-            ? m_fluorescence->eval_norm(si, active) 
+        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance
+            ? m_fluorescence->eval_norm(si, active)
             : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
@@ -257,8 +268,8 @@ public:
             return { 0.f, 0.f };
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance 
-            ? m_fluorescence->eval_norm(si, active) 
+        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance
+            ? m_fluorescence->eval_norm(si, active)
             : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
@@ -293,8 +304,8 @@ public:
             return { 0.f, 0.f };
 
         UnpolarizedSpectrum diffuse_value = m_reflectance->eval(si, active);
-        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance 
-            ? m_fluorescence->eval_norm(si, active) 
+        UnpolarizedSpectrum fluoro_value = ctx.mode == TransportMode::Radiance
+            ? m_fluorescence->eval_norm(si, active)
             : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
