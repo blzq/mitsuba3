@@ -32,8 +32,8 @@ placed samples.
         :name: irregular
 
         <spectrum type="irregular">
-            <string name="wavelengths" value="400, 700">
-            <string name="values" value="0.1, 0.2">
+            <string name="wavelengths" value="400, 700" />
+            <string name="values" value="0.1, 0.2" />
         </spectrum>
 
     .. code-tab:: python
