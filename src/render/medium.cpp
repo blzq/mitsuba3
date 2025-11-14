@@ -10,7 +10,8 @@ NAMESPACE_BEGIN(mitsuba)
 MI_VARIANT Medium<Float, Spectrum>::Medium()
     : JitObject<Medium>(""),
       m_is_homogeneous(false),
-      m_has_spectral_extinction(true) {
+      m_has_spectral_extinction(true),
+      m_has_fluorescence(false) {
 }
 
 MI_VARIANT Medium<Float, Spectrum>::Medium(const Properties &props)

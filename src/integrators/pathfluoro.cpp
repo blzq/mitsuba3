@@ -223,33 +223,31 @@ public:
             /* Separate sample() from eval_pdf() to before emitter sampling
                to decide if the interaction should be wavelength-shifting
                i.e. fluorescent */
-            Float sample_1 = ls.sampler->next_1d();
-            Point2f sample_2 = ls.sampler->next_2d();
-
             auto [bsdf_sample, bsdf_weight] =
-                bsdf->sample(bsdf_ctx, si, sample_1, sample_2);
+                bsdf->sample(bsdf_ctx, si,
+                             ls.sampler->next_1d(), ls.sampler->next_2d());
 
             /* If a fluorescent component is sampled, sample the excitation
                distribution to shift the wavelength of the incoming ray. The
-               new wavelength is used to sample emitters and when generating
-               the next ray, but the original wavelength is used to evaluate
-               the fluorescent emission of the hit object itself. */
+               new wavelength (shifted_si) is used to sample emitters and to
+               generate the next ray, but the original wavelength (si) is used
+               to evaluate the fluorescent emission of the hit object itself */
             Mask is_fluoro = has_flag(bsdf_sample.sampled_type,
                                       BSDFFlags::FluorescentReflection);
             SurfaceInteraction3f shifted_si = si;
             UnpolarizedSpectrum excite_weight (1.f);
             if (dr::any_or<true>(is_fluoro)) {
                 auto [fluoro_wavelengths, fluoro_weight] =
-                    bsdf->sample_wavelength_shift(bsdf_ctx, si, sample_1);
+                    bsdf->sample_wavelength_shift(bsdf_ctx, si, ls.sampler->next_1d());
                 dr::masked(shifted_si.wavelengths, is_fluoro) = fluoro_wavelengths;
                 dr::masked(excite_weight,          is_fluoro) = fluoro_weight;
+                /* For fluorescent materials, the fluorescent emission distribution
+                is normalised to have a unit integral, while the excitation
+                distribution represents the proportion of the incoming energy
+                that is re-emitted. So, the BSDF weight needs to be multiplied
+                by the excitation weight. */
+                bsdf_weight *= excite_weight;
             }
-            /* For fluorescent materials, the fluorescent emission distribution
-               is normalised to have a unit integral, while the excitation
-               distribution represents the proportion of the incoming energy
-               that is re-emitted. So, the BSDF weight needs to be multiplied
-               by the excitation weight. */
-            bsdf_weight = bsdf_weight * excite_weight;
 
             // ---------------------- Emitter sampling ----------------------
 
@@ -275,19 +273,15 @@ public:
                 }
 
                 wo = si.to_local(ds.d);
-            }
 
-            // ------ Evaluate BSDF * cos(theta) and sample direction -------
+                // --------------- Emitter sampling contribution ----------------
+                // Evaluate BSDF * cos(theta) and sample direction
+                auto [bsdf_val, bsdf_pdf] = dr::select(
+                    is_fluoro,
+                    bsdf->eval_pdf_fluoro(bsdf_ctx, si, wo),
+                    bsdf->eval_pdf(bsdf_ctx, si, wo)
+                );
 
-            auto [bsdf_val, bsdf_pdf] = dr::select(
-                is_fluoro,
-                bsdf->eval_pdf_fluoro(bsdf_ctx, si, wo),
-                bsdf->eval_pdf(bsdf_ctx, si, wo)
-            );
-
-            // --------------- Emitter sampling contribution ----------------
-
-            if (dr::any_or<true>(active_em)) {
                 bsdf_val = si.to_world_mueller(bsdf_val, -wo, si.wi);
 
                 // Compute the MIS weight
@@ -295,7 +289,10 @@ public:
                     dr::select(ds.delta, 1.f, mis_weight(ds.pdf, bsdf_pdf));
 
                 // Accumulate, being careful with polarization (see spec_fma)
-                Spectrum value = excite_weight * bsdf_val * em_weight * mis_em;
+                Spectrum value = bsdf_val * em_weight * mis_em;
+                if (dr::any_or<true>(is_fluoro)) {
+                    value *= excite_weight;
+                }
 
                 ls.result[active_em] = spec_fma(ls.throughput, value, ls.result);
             }
