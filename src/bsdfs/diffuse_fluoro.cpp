@@ -91,7 +91,7 @@ public:
         }
         m_reflectance = props.get_texture<Texture>("reflectance", 0.f);
         m_fluorescence = props.get_texture<Texture>("fluorescence", .5f);
-        m_excitation = props.get_texture<Texture>("excitation", 0.5f);
+        m_excitation = props.get_texture<Texture>("excitation", .5f);
 
         m_components.push_back(BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide);
         m_components.push_back(BSDFFlags::FluorescentReflection | BSDFFlags::FrontSide);
