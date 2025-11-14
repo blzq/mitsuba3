@@ -109,6 +109,7 @@ protected:
     bool m_sample_emitters;
     bool m_is_homogeneous;
     bool m_has_spectral_extinction;
+    bool m_has_fluorescence;
 
     MI_DECLARE_TRAVERSE_CB(m_phase_function)
 };
