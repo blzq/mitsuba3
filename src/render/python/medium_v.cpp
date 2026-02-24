@@ -27,9 +27,24 @@ public:
         NB_OVERRIDE_PURE(get_majorant, mi, active);
     }
 
+    MediumInteraction3f sample_interaction(const Ray3f &ray, Float sample, UInt32 channel, Mask active) const override {
+        NB_OVERRIDE_PURE(sample_interaction, ray, sample, channel, active);
+    }
+
     std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum>
     get_scattering_coefficients(const MediumInteraction3f &mi, Mask active = true) const override {
         NB_OVERRIDE_PURE(get_scattering_coefficients, mi, active);
+    }
+
+    std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum,
+               UnpolarizedSpectrum, UnpolarizedSpectrum>
+    get_scattering_coefficients_fluoro(const MediumInteraction3f &mi, Mask active = true) const override {
+        NB_OVERRIDE_PURE(get_scattering_coefficients_fluoro, mi, active);
+    }
+
+    std::pair<Wavelength, UnpolarizedSpectrum>
+    sample_wavelength_shift(const MediumInteraction3f &mi, Float sample, Mask active) const override {
+        NB_OVERRIDE_PURE(sample_wavelength_shift, mi, sample, active);
     }
 
     std::string to_string() const override {
@@ -47,6 +62,7 @@ public:
     using Medium::m_sample_emitters;
     using Medium::m_is_homogeneous;
     using Medium::m_has_spectral_extinction;
+    using Medium::m_has_fluorescence;
 
     DR_TRAMPOLINE_TRAVERSE_CB(Medium)
 };
@@ -68,6 +84,9 @@ template <typename Ptr, typename Cls> void bind_medium_generic(Cls &cls) {
        .def("has_spectral_extinction",
             [](Ptr ptr) { return ptr->has_spectral_extinction(); },
             D(Medium, has_spectral_extinction))
+       .def("has_fluorescence",
+            [](Ptr ptr) { return ptr->has_fluorescence(); },
+            D(Medium, has_fluorescence))
        .def("get_majorant",
             [](Ptr ptr, const MediumInteraction3f &mi, Mask active) {
                 return ptr->get_majorant(mi, active); },
@@ -89,6 +108,12 @@ template <typename Ptr, typename Cls> void bind_medium_generic(Cls &cls) {
                 return ptr->transmittance_eval_pdf(mi, si, active); },
             "mi"_a, "si"_a, "active"_a,
             D(Medium, transmittance_eval_pdf))
+       .def("sample_wavelength_shift",
+            [](Ptr ptr, const SurfaceInteraction3f &si,
+               Float sample, Mask active) {
+                return ptr->sample_wavelength_shift(si, sample, active); },
+            "si"_a, "sample"_a, "active"_a,
+            D(Medium, sample_wavelength_shift))
        .def("get_scattering_coefficients",
             [](Ptr ptr, const MediumInteraction3f &mi, Mask active = true) {
                 return ptr->get_scattering_coefficients(mi, active); },
@@ -106,6 +131,7 @@ MI_PY_EXPORT(Medium) {
         .def_field(PyMedium, m_sample_emitters, D(Medium, m_sample_emitters))
         .def_field(PyMedium, m_is_homogeneous, D(Medium, m_is_homogeneous))
         .def_field(PyMedium, m_has_spectral_extinction, D(Medium, m_has_spectral_extinction))
+        .def_field(PyMedium, m_has_fluorescence, D(Medium, m_has_fluorescence))
         .def("__repr__", &Medium::to_string, D(Medium, to_string));
 
     drjit::bind_traverse(medium);

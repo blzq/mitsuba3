@@ -129,11 +129,15 @@ public:
             : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
+        Float fluoro_scale = ctx.mode == TransportMode::Radiance
+            ? m_excitation->sum(si, active) : 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
             // TODO: bad approximation (?) when the number of wavelengths per ray > 1
-            prob_diffuse = dr::mean(diffuse_value / (diffuse_value + fluoro_value + dr::Epsilon<Float>));
+            prob_diffuse = dr::mean(
+                diffuse_value /
+                (diffuse_value + fluoro_scale * fluoro_value + dr::Epsilon<Float>));
 
         Mask sample_diffuse = active && sample1 < prob_diffuse;
         Mask sample_fluoro = active && !sample_diffuse;
@@ -165,14 +169,13 @@ public:
     std::pair<Wavelength, UnpolarizedSpectrum> sample_wavelength_shift(
         const BSDFContext &ctx, const SurfaceInteraction3f &si,
         Float sample, Mask active) const override {
-        float radiance_mode = ctx.mode == TransportMode::Radiance;
-
-        auto spectrum = radiance_mode ? m_excitation : m_fluorescence;
+        auto spectrum = ctx.mode == TransportMode::Radiance ? m_excitation : m_fluorescence;
         auto [wavelengths, weight] = spectrum->sample_spectrum(
             si, math::sample_shifted<Wavelength>(sample), active);
 
         // The emission spectrum should have integral normalised to 1
-        return { wavelengths, radiance_mode ? weight : weight / spectrum->sum() };
+        return { wavelengths,
+                 ctx.mode == TransportMode::Radiance ? weight : weight / spectrum->sum(si, active) };
     };
 
     Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
@@ -241,11 +244,15 @@ public:
             : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
+        Float fluoro_scale = ctx.mode == TransportMode::Radiance
+            ? m_excitation->sum(si, active) : 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
             // TODO: bad approximation (?) when the number of wavelengths per ray > 1
-            prob_diffuse = dr::mean(diffuse_value / (diffuse_value + fluoro_value + dr::Epsilon<Float>));
+            prob_diffuse = dr::mean(
+                diffuse_value /
+                (diffuse_value + fluoro_scale * fluoro_value + dr::Epsilon<Float>));
 
         return dr::select(cos_theta_i > 0.f && cos_theta_o > 0.f, pdf * prob_diffuse, 0.f);
     }
@@ -273,11 +280,15 @@ public:
             : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
+        Float fluoro_scale = ctx.mode == TransportMode::Radiance
+            ? m_excitation->sum(si, active) : 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
             // TODO: bad approximation (?) when the number of wavelengths per ray > 1
-            prob_diffuse = dr::mean(diffuse_value / (diffuse_value + fluoro_value + dr::Epsilon<Float>));
+            prob_diffuse = dr::mean(
+                diffuse_value /
+                (diffuse_value + fluoro_scale * fluoro_value + dr::Epsilon<Float>));
 
         UnpolarizedSpectrum value = diffuse_value * dr::InvPi<Float> * cos_theta_o;
 
@@ -309,11 +320,15 @@ public:
             : m_excitation->eval(si, active);
 
         Float prob_diffuse = 1.f;
+        Float fluoro_scale = ctx.mode == TransportMode::Radiance
+            ? m_excitation->sum(si, active) : 1.f;
         if (unlikely(has_fluoro != has_diffuse))
             prob_diffuse = has_diffuse ? 1.f : 0.f;
         else
             // TODO: bad approximation (?) when the number of wavelengths per ray > 1
-            prob_diffuse = dr::mean(diffuse_value / (diffuse_value + fluoro_value + dr::Epsilon<Float>));
+            prob_diffuse = dr::mean(
+                diffuse_value /
+                (diffuse_value + fluoro_scale * fluoro_value + dr::Epsilon<Float>));
 
         UnpolarizedSpectrum value = fluoro_value * dr::InvPi<Float> * cos_theta_o;
 

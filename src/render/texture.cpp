@@ -55,7 +55,7 @@ Texture<Float, Spectrum>::mean() const {
 }
 
 MI_VARIANT Float
-Texture<Float, Spectrum>::sum() const {
+Texture<Float, Spectrum>::sum(const SurfaceInteraction3f &, Mask) const {
     NotImplementedError("sum");
 }
 
