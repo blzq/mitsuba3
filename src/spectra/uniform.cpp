@@ -121,7 +121,9 @@ public:
 
     Float mean() const override { return m_value; }
 
-    Float sum() const override { return m_value * (m_range.y() - m_range.x()); }
+    Float sum(const SurfaceInteraction3f & /* si */, Mask /* active */) const override { 
+        return m_value * (m_range.y() - m_range.x());
+    }
 
     ScalarVector2f wavelength_range() const override {
         return m_range;

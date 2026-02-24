@@ -102,6 +102,24 @@ public:
     virtual UnpolarizedSpectrum eval_norm(const SurfaceInteraction3f &si,
                                           Mask active = true) const;
 
+    // /**
+    //  * \brief Evaluate the density function of the wavelengths in si.wavelengths
+    //  * as a probability per unit wavelength (in units of 1/nm), followed by
+    //  * scaling such that the maximum of the spectrum is set at 1.0.
+    //  * Equivalent to eval() divided by max().
+    //  *
+    //  * Not every implementation necessarily overrides this function. The default
+    //  * implementation throws an exception.
+    //  *
+    //  * \param si
+    //  *     An interaction record describing the associated surface position
+    //  *
+    //  * \return
+    //  *     A density value for each wavelength in <tt>si.wavelengths</tt>
+    //  */
+    // virtual UnpolarizedSpectrum eval_scaled(const SurfaceInteraction3f &si,
+    //                                         Mask active = true) const;
+
     /**
      * \brief Importance sample a surface position proportional to the
      * overall spectral reflectance or intensity of the texture
@@ -195,14 +213,16 @@ public:
     virtual Float mean() const;
 
    /**
-     * Return the integral of the spectrum, for normalization of spectra values.
+     * Return the integral of the spectrum at the given surface interaction,
+     * for normalization of spectra values.
      *
      * Not every implementation necessarily provides this function. The default
      * implementation throws an exception.
      *
      * Even if the operation is provided, it may only return an approximation.
      */
-    virtual Float sum() const;
+    virtual Float sum(const SurfaceInteraction3f &si,
+                      Mask active = true) const;
 
     /**
      * \brief Returns the resolution of the texture, assuming that it is based
@@ -270,6 +290,7 @@ DRJIT_CALL_TEMPLATE_BEGIN(mitsuba::Texture)
     DRJIT_CALL_METHOD(sample_spectrum)
     DRJIT_CALL_METHOD(pdf_spectrum)
     DRJIT_CALL_METHOD(eval_norm)
+    // DRJIT_CALL_METHOD(eval_scaled)
     DRJIT_CALL_METHOD(sample_position)
     DRJIT_CALL_METHOD(pdf_position)
     DRJIT_CALL_METHOD(eval_1)

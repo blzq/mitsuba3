@@ -234,7 +234,7 @@ public:
                to evaluate the fluorescent emission of the hit object itself */
             Mask is_fluoro = has_flag(bsdf_sample.sampled_type,
                                       BSDFFlags::FluorescentReflection);
-            SurfaceInteraction3f shifted_si = si;
+            SurfaceInteraction3f shifted_si(si);
             UnpolarizedSpectrum excite_weight (1.f);
             if (dr::any_or<true>(is_fluoro)) {
                 auto [fluoro_wavelengths, fluoro_weight] =
@@ -281,6 +281,9 @@ public:
                     bsdf->eval_pdf_fluoro(bsdf_ctx, si, wo),
                     bsdf->eval_pdf(bsdf_ctx, si, wo)
                 );
+                if (dr::any_or<true>(is_fluoro)) {
+                    bsdf_val *= excite_weight;
+                }
 
                 bsdf_val = si.to_world_mueller(bsdf_val, -wo, si.wi);
 
@@ -290,9 +293,6 @@ public:
 
                 // Accumulate, being careful with polarization (see spec_fma)
                 Spectrum value = bsdf_val * em_weight * mis_em;
-                if (dr::any_or<true>(is_fluoro)) {
-                    value *= excite_weight;
-                }
 
                 ls.result[active_em] = spec_fma(ls.throughput, value, ls.result);
             }
@@ -318,6 +318,9 @@ public:
                     bsdf->eval_pdf_fluoro(bsdf_ctx, si, wo_2, ls.active),
                     bsdf->eval_pdf(bsdf_ctx, si, wo_2, ls.active)
                 );
+                if (dr::any_or<true>(is_fluoro)) {
+                    bsdf_val_2 *= excite_weight;
+                }
 
                 bsdf_weight[bsdf_pdf_2 > 0.f] = bsdf_val_2 / dr::detach(bsdf_pdf_2);
             }
