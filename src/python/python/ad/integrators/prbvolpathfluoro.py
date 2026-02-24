@@ -1,0 +1,492 @@
+from __future__ import annotations # Delayed parsing of type annotations
+
+import drjit as dr
+import mitsuba as mi
+
+from .common import RBIntegrator, mis_weight
+
+def index_spectrum(spec, idx):
+    m = spec[0]
+    if mi.is_rgb:
+        m[idx == 1] = spec[1]
+        m[idx == 2] = spec[2]
+    return m
+
+class PRBVolpathFluoroIntegrator(RBIntegrator):
+    r"""
+    .. _integrator-prbvolpathfluoro:
+
+    Path Replay Backpropagation Volumetric Integrator with Fluorescence (:monosp:`prbvolpathfluoro`)
+    -------------------------------------------------------------------------
+
+    .. pluginparameters::
+
+     * - max_depth
+       - |int|
+       - Specifies the longest path depth in the generated output image (where -1
+         corresponds to :math:`\infty`). A value of 1 will only render directly
+         visible light sources. 2 will lead to single-bounce (direct-only)
+         illumination, and so on. (Default: 6)
+
+     * - rr_depth
+       - |int|
+       - Specifies the path depth, at which the implementation will begin to use
+         the *russian roulette* path termination criterion. For example, if set to
+         1, then path generation many randomly cease after encountering directly
+         visible surfaces. (Default: 5)
+
+     * - hide_emitters
+       - |bool|
+       - Hide directly visible emitters. (Default: no, i.e. |false|)
+
+
+    This class implements a volumetric Path Replay Backpropagation (PRB) integrator
+    with the following properties:
+
+    - Differentiable delta tracking for free-flight distance sampling
+
+    - Emitter sampling (a.k.a. next event estimation).
+
+    - Russian Roulette stopping criterion.
+
+    - No projective sampling. This means that the integrator cannot be used for
+      shape optimization (it will return incorrect/biased gradients for
+      geometric parameters like vertex positions.)
+
+    - Detached sampling. This means that the properties of ideal specular
+      objects (e.g., the IOR of a glass vase) cannot be optimized.
+
+    See the paper :cite:`Vicini2021` for details on PRB and differentiable delta
+    tracking.
+
+    .. warning::
+        This integrator is not supported in variants which track polarization
+        states.
+
+    .. tabs::
+
+        .. code-tab:: python
+
+            'type': 'prbvolpathfluoro',
+            'max_depth': 8
+    """
+    def __init__(self, props):
+        super().__init__(props)
+        self.use_nee = False
+        self.nee_handle_homogeneous = False
+        self.handle_null_scattering = False
+        self.is_prepared = False
+
+    def prepare_scene(self, scene):
+        if self.is_prepared:
+            return
+
+        for shape in scene.shapes():
+            for medium in [shape.interior_medium(), shape.exterior_medium()]:
+                if medium is not None:
+                    # Enable NEE if a medium specifically asks for it
+                    self.use_nee = self.use_nee or medium.use_emitter_sampling()
+                    self.nee_handle_homogeneous = self.nee_handle_homogeneous or medium.is_homogeneous()
+                    self.handle_null_scattering = self.handle_null_scattering or (not medium.is_homogeneous())
+        self.is_prepared = True
+        # By default enable always NEE in case there are surfaces
+        self.use_nee = True
+
+    @dr.syntax
+    def sample(self,
+               mode: dr.ADMode,
+               scene: mi.Scene,
+               sampler: mi.Sampler,
+               ray: mi.Ray3f,
+               δL: Optional[mi.Spectrum],
+               state_in: Optional[mi.Spectrum],
+               active: mi.Bool,
+               **kwargs # Absorbs unused arguments
+    ) -> Tuple[mi.Spectrum, mi.Bool, List[mi.Float], mi.Spectrum]:
+        self.prepare_scene(scene)
+
+        if mode == dr.ADMode.Forward:
+            raise RuntimeError("PRBVolpathFluoroIntegrator doesn't support "
+                               "forward-mode differentiation!")
+
+        is_primal = mode == dr.ADMode.Primal
+
+        ray = mi.Ray3f(ray)
+        depth = mi.UInt32(0)                          # Depth of current vertex
+        L = mi.Spectrum(0 if is_primal else state_in) # Radiance accumulator
+        δL = mi.Spectrum(δL if δL is not None else 0) # Differential/adjoint radiance
+        throughput = mi.Spectrum(1)                   # Path throughput weight
+        η = mi.Float(1)                               # Index of refraction
+        active = mi.Bool(active)
+
+        si = dr.zeros(mi.SurfaceInteraction3f)
+        needs_intersection = mi.Bool(True)
+        last_scatter_event = dr.zeros(mi.Interaction3f)
+        last_scatter_direction_pdf = mi.Float(1.0)
+
+        # TODO: support sensors inside media
+        medium = dr.zeros(mi.MediumPtr)
+
+        channel = 0
+        depth = mi.UInt32(0)
+        valid_ray = mi.Bool(False)
+        specular_chain = mi.Bool(True)
+
+        if mi.is_rgb:
+            # Sample a color channel to sample free-flight distances
+            n_channels = dr.size_v(mi.Spectrum)
+            channel = mi.UInt32(dr.minimum(n_channels * sampler.next_1d(active), n_channels - 1))
+
+        while dr.hint(active,
+                      label=f"Path Replay Backpropagation ({mode.name})"):
+            active &= dr.any(throughput != 0.0)
+
+            #--------------------- Perform russian roulette --------------------
+
+            q = dr.minimum(dr.max(throughput) * dr.square(η), 0.99)
+            perform_rr = (depth > self.rr_depth)
+            active &= (sampler.next_1d(active) < q) | ~perform_rr
+            throughput[perform_rr] = throughput * dr.rcp(q)
+
+            active_medium = active & (medium != None)
+            active_surface = active & ~active_medium
+
+            with dr.resume_grad(when=not is_primal):
+                #--------------------- Sample medium interaction -------------------
+
+                # Handle medium sampling and potential medium escape
+                u = sampler.next_1d(active_medium)
+                mei = medium.sample_interaction(ray, u, channel, active_medium)
+                mei.t = dr.detach(mei.t)
+
+                ray.maxt[active_medium & medium.is_homogeneous() & mei.is_valid()] = mei.t
+                intersect = needs_intersection & active_medium
+                si[intersect] = scene.ray_intersect(ray, intersect)
+
+                needs_intersection &= ~active_medium
+                mei.t[active_medium & (si.t < mei.t)] = dr.inf
+
+                # Evaluate ratio of transmittance and free-flight PDF
+                tr, free_flight_pdf = medium.transmittance_eval_pdf(mei, si, active_medium)
+                tr_pdf = index_spectrum(free_flight_pdf, channel)
+                weight = mi.Spectrum(1.0)
+                weight[active_medium] *= dr.select(tr_pdf > 0.0, tr / dr.detach(tr_pdf), 0.0)
+
+                escaped_medium = active_medium & ~mei.is_valid()
+                active_medium &= mei.is_valid()
+
+                # Handle null and real scatter events
+                if dr.hint(self.handle_null_scattering, mode='scalar'):
+                    if medium.has_fluorescence():
+                        scatter_prob = dr.mean((mei.sigma_t + mei.sigma_f) / mei.combined_extinction)
+                    else:
+                        scatter_prob = dr.mean(mei.sigma_t / mei.combined_extinction)
+                    act_null_scatter = (sampler.next_1d(active_medium) >= scatter_prob) & active_medium
+                    act_medium_scatter = ~act_null_scatter & active_medium
+                    weight[act_null_scatter] *= mei.sigma_n / dr.detach(1 - scatter_prob)
+                else:
+                    scatter_prob = mi.Float(1.0)
+                    act_medium_scatter = active_medium
+
+                depth[act_medium_scatter] += 1
+                last_scatter_event[act_medium_scatter] = dr.detach(mei)
+
+                # Don't estimate lighting if we exceeded number of bounces
+                active &= depth < self.max_depth
+                act_medium_scatter &= active
+                if dr.hint(self.handle_null_scattering, mode='scalar'):
+                    ray.o[act_null_scatter] = dr.detach(mei.p)
+                    si.t[act_null_scatter] = si.t - dr.detach(mei.t)
+
+                if medium.has_fluorescence():
+                    fluoro_prob = dr.mean(mei.sigma_f / (mei.sigma_f + mei.sigma_t))
+                    act_normal_scatter = (sampler.next_1d(act_medium_scatter) >= fluoro_prob) & act_medium_scatter
+                    act_fluoro_scatter = ~act_normal_scatter & act_medium_scatter
+                    # TODO Check if this is right: Compare with PRB paper
+                    weight[act_fluoro_scatter] *= mei.sigma_f / (dr.detach(scatter_prob * fluoro_prob))
+                    weight[act_normal_scatter] *= mei.sigma_s / (dr.detach(scatter_prob * (1 - fluoro_prob)))
+                    # Shift wavelength of ray for fluorescent medium interaction
+                    med_fluoro_wavelengths, med_fluoro_weight = medium.sample_wavelength_shift(
+                        mei, sampler.next_1d(act_fluoro_scatter), act_fluoro_scatter)
+                    mei[act_fluoro_scatter].wavelengths = med_fluoro_wavelengths
+                    weight[act_fluoro_scatter] *= med_fluoro_weight
+                else:
+                    weight[act_medium_scatter] *= mei.sigma_s / dr.detach(scatter_prob)
+                throughput *= dr.detach(weight)
+
+                mei = dr.detach(mei)
+                if dr.hint(not is_primal and dr.grad_enabled(weight), mode='scalar'):
+                    Lo = dr.detach(dr.select(active_medium | escaped_medium, L / dr.maximum(1e-8, weight), 0.0))
+                    dr.backward(δL * weight * Lo)
+
+                phase_ctx = mi.PhaseFunctionContext(sampler)
+                phase = mei.medium.phase_function()
+                phase[~act_medium_scatter] = dr.zeros(mi.PhaseFunctionPtr)
+
+                #--------------------- Surface Interactions --------------------
+
+                active_surface |= escaped_medium
+                intersect = active_surface & needs_intersection
+                si[intersect] = scene.ray_intersect(ray, intersect)
+
+                # ---------------------- Hide area emitters ----------------------
+
+                if dr.hint(self.hide_emitters, mode='scalar'):
+                    # Are we on the first segment and did we hit an area emitter?
+                    # If so, skip all area emitters along this ray
+                    skip_emitters = (
+                        si.is_valid() &
+                        (si.shape.emitter() != None) &
+                        (depth == 0) &
+                        intersect
+                    )
+
+                    ray_skip = si.spawn_ray(ray.d)
+                    pi = self.skip_area_emitters(scene, ray_skip, True, skip_emitters)
+                    si_after_skip = pi.compute_surface_interaction(ray, mi.RayFlags.All, skip_emitters)
+                    si[skip_emitters] = si_after_skip
+
+                # ----------------- Intersection with emitters -----------------
+
+                ray_from_camera = active_surface & (depth == 0)
+                count_direct = ray_from_camera | specular_chain
+                emitter = si.emitter(scene)
+                active_e = active_surface & (emitter != None) & ~((depth == 0) & self.hide_emitters)
+
+                # Get the PDF of sampling this emitter using next event estimation
+                ds = mi.DirectionSample3f(scene, si, last_scatter_event)
+                if dr.hint(self.use_nee, mode='scalar'):
+                    emitter_pdf = scene.pdf_emitter_direction(last_scatter_event, ds, active_e)
+                else:
+                    emitter_pdf = 0.0
+                emitted = emitter.eval(si, active_e)
+                contrib = dr.select(count_direct, throughput * emitted,
+                                    throughput * mis_weight(last_scatter_direction_pdf, emitter_pdf) * emitted)
+                L[active_e] += dr.detach(contrib if is_primal else -contrib)
+                if dr.hint(not is_primal and dr.grad_enabled(contrib), mode='scalar'):
+                    dr.backward(δL * contrib)
+
+                active_surface &= si.is_valid()
+                ctx = mi.BSDFContext()
+                bsdf = si.bsdf(ray)
+
+                # Move bsdf.sample() to before emitter sampling to decide if
+                # the interaction should be wavelength-shifting (fluorescent)
+                with dr.suspend_grad():
+                    bs, bsdf_weight = bsdf.sample(ctx, si,
+                                                  sampler.next_1d(active_surface),
+                                                  sampler.next_2d(active_surface),
+                                                  active_surface)
+                    active_surface &= bs.pdf > 0
+                    is_fluoro_surf = mi.has_flag(
+                        bs.sampled_type, mi.BSDFFlags.FluorescentReflection)
+                    shifted_si = mi.SurfaceInteraction3f(si)
+                    excite_weight = mi.UnpolarizedSpectrum(1.0)
+                    surf_fluoro_wavelengths, surf_fluoro_weight = bsdf.sample_wavelength_shift(
+                        ctx, si, sampler.next_1d(active_surface))
+                    shifted_si.wavelengths[is_fluoro_surf] = surf_fluoro_wavelengths
+                    excite_weight[is_fluoro_surf] = surf_fluoro_weight
+                    bsdf_weight *= excite_weight
+
+                # ---------------------- Emitter sampling ----------------------
+
+                if dr.hint(self.use_nee, mode='scalar'):
+                    active_e_surface = active_surface & mi.has_flag(bsdf.flags(), mi.BSDFFlags.Smooth) & (depth + 1 < self.max_depth)
+                    sample_emitters = mei.medium.use_emitter_sampling()
+                    specular_chain &= ~act_medium_scatter
+                    specular_chain |= act_medium_scatter & ~sample_emitters
+
+                    active_e_medium = act_medium_scatter & sample_emitters
+                    active_e = active_e_surface | active_e_medium
+
+                    nee_sampler = sampler if is_primal else sampler.clone()
+                    emitted, ds = self.sample_emitter(mei, shifted_si, active_e_medium, active_e_surface,
+                        scene, sampler, medium, channel, active_e, mode=dr.ADMode.Primal)
+
+                    # Query the BSDF for that emitter-sampled direction
+                    bsdf_val, bsdf_pdf = dr.select(
+                        is_fluoro_surf,
+                        excite_weight * bsdf.eval_pdf_fluoro(ctx, si, si.to_local(ds.d), active_e_surface),
+                        bsdf.eval_pdf(ctx, si, si.to_local(ds.d), active_e_surface)
+                    )
+                    bsdf_val *= excite_weight
+
+                    phase_val, phase_pdf = phase.eval_pdf(phase_ctx, mei, ds.d, active_e_medium)
+                    nee_weight = dr.select(active_e_surface, bsdf_val, phase_val)
+                    nee_directional_pdf = dr.select(ds.delta, 0.0, dr.select(active_e_surface, bsdf_pdf, phase_pdf))
+
+                    contrib = throughput * nee_weight * mis_weight(ds.pdf, nee_directional_pdf) * emitted
+                    L[active_e] += dr.detach(contrib if is_primal else -contrib)
+
+                    if dr.hint(not is_primal, mode='scalar'):
+                        self.sample_emitter(mei, shifted_si, active_e_medium, active_e_surface,
+                            scene, nee_sampler, medium, channel, active_e, adj_emitted=contrib,
+                            δL=δL, mode=mode)
+
+                        if dr.hint(dr.grad_enabled(nee_weight) or dr.grad_enabled(emitted), mode='scalar'):
+                            dr.backward(δL * contrib)
+
+                #-------------------- Phase function sampling ------------------
+
+                valid_ray |= act_medium_scatter
+                with dr.suspend_grad():
+                    wo, phase_weight, phase_pdf = phase.sample(phase_ctx, mei,
+                                                               sampler.next_1d(act_medium_scatter),
+                                                               sampler.next_2d(act_medium_scatter),
+                                                               act_medium_scatter)
+                act_medium_scatter &= phase_pdf > 0.0
+
+                # Re evaluate the phase function value in an attached manner
+                phase_eval, _ = phase.eval_pdf(phase_ctx, mei, wo, act_medium_scatter)
+                if dr.hint(not is_primal and dr.grad_enabled(phase_eval), mode='scalar'):
+                    Lo = phase_eval * dr.detach(dr.select(act_medium_scatter, L / dr.maximum(1e-8, phase_eval), 0.0))
+                    if mode == dr.ADMode.Backward:
+                        dr.backward_from(δL * Lo)
+                    else:
+                        δL += dr.forward_to(Lo)
+
+                throughput[act_medium_scatter] *= phase_weight
+
+                ray[act_medium_scatter] = mei.spawn_ray(wo)
+                needs_intersection |= act_medium_scatter
+                last_scatter_direction_pdf[act_medium_scatter] = phase_pdf
+
+                # ------------------------ BSDF sampling -----------------------
+                bsdf_eval = dr.select(is_fluoro_surf,
+                                      excite_weight * bsdf.eval_fluoro(ctx, si, bs.wo, active_surface),
+                                      bsdf.eval(ctx, si, bs.wo, active_surface))
+
+                if dr.hint(not is_primal and dr.grad_enabled(bsdf_eval), mode='scalar'):
+                    Lo = bsdf_eval * dr.detach(dr.select(active_surface, L / dr.maximum(1e-8, bsdf_eval), 0.0))
+                    if dr.hint(mode == dr.ADMode.Backward, mode='scalar'):
+                        dr.backward_from(δL * Lo)
+                    else:
+                        δL += dr.forward_to(Lo)
+
+                throughput[active_surface] *= bsdf_weight
+                η[active_surface] *= bs.eta
+                bsdf_ray = shifted_si.spawn_ray(si.to_world(bs.wo))
+                ray[active_surface] = bsdf_ray
+
+                needs_intersection |= active_surface
+                non_null_bsdf = active_surface & ~mi.has_flag(bs.sampled_type, mi.BSDFFlags.Null)
+                depth[non_null_bsdf] += 1
+
+                # update the last scatter PDF event if we encountered a non-null scatter event
+                last_scatter_event[non_null_bsdf] = si
+                last_scatter_direction_pdf[non_null_bsdf] = bs.pdf
+
+                valid_ray |= non_null_bsdf
+                specular_chain |= non_null_bsdf & mi.has_flag(bs.sampled_type, mi.BSDFFlags.Delta)
+                specular_chain &= ~(active_surface & mi.has_flag(bs.sampled_type, mi.BSDFFlags.Smooth))
+                has_medium_trans = active_surface & si.is_medium_transition()
+                medium[has_medium_trans] = si.target_medium(ray.d)
+                active &= (active_surface | active_medium)
+
+        return L if is_primal else δL, valid_ray, [], L
+
+    @dr.syntax
+    def sample_emitter(self, mei, si, active_medium, active_surface, scene, sampler, medium, channel,
+                       active, adj_emitted=None, δL=None, mode=None):
+        is_primal = mode == dr.ADMode.Primal
+
+        active = mi.Bool(active)
+
+        ref_interaction = dr.zeros(mi.Interaction3f)
+        ref_interaction[active_medium] = mei
+        ref_interaction[active_surface] = si
+
+        ds, emitter_val = scene.sample_emitter_direction(ref_interaction,
+                                                         sampler.next_2d(active),
+                                                         False, active)
+        ds = dr.detach(ds)
+        invalid = (ds.pdf == 0.0)
+        emitter_val[invalid] = 0.0
+        active &= ~invalid
+
+        medium = dr.select(active, medium, dr.zeros(mi.MediumPtr))
+        medium[(active_surface & si.is_medium_transition())] = si.target_medium(ds.d)
+
+        ray = ref_interaction.spawn_ray_to(ds.p)
+        max_dist = mi.Float(ray.maxt)
+        total_dist = mi.Float(0.0)
+        si = dr.zeros(mi.SurfaceInteraction3f)
+        needs_intersection = mi.Bool(True)
+        transmittance = mi.Spectrum(1.0)
+
+        while dr.hint(active, label=f"PRB Next Event Estimation ({mode.name})"):
+            remaining_dist = max_dist - total_dist
+            ray.maxt = dr.detach(remaining_dist)
+            active &= remaining_dist > 0.0
+
+            # This ray will not intersect if it reached the end of the segment
+            needs_intersection &= active
+            si[needs_intersection] = scene.ray_intersect(ray, needs_intersection)
+            needs_intersection &= False
+
+            active_medium = active & (medium != None)
+            active_surface = active & ~active_medium
+
+            # Handle medium interactions / transmittance
+            mei = medium.sample_interaction(ray, sampler.next_1d(active_medium), channel, active_medium)
+            mei.t[active_medium & (si.t < mei.t)] = dr.inf
+            mei.t = dr.detach(mei.t)
+
+            tr_multiplier = mi.Spectrum(1.0)
+
+            # Special case for homogeneous media: directly advance to the next surface / end of the segment
+            if dr.hint(self.nee_handle_homogeneous, mode='scalar'):
+                active_homogeneous = active_medium & medium.is_homogeneous()
+                mei.t[active_homogeneous] = dr.minimum(remaining_dist, si.t)
+                tr_multiplier[active_homogeneous] = medium.transmittance_eval_pdf(mei, si, active_homogeneous)[0]
+                mei.t[active_homogeneous] = dr.inf
+
+            escaped_medium = active_medium & ~mei.is_valid()
+
+            # Ratio tracking transmittance computation
+            active_medium &= mei.is_valid()
+            ray.o[active_medium] = dr.detach(mei.p)
+            si.t[active_medium] = dr.detach(si.t - mei.t)
+            if medium.has_fluorescence():
+                # TODO: Introduce sampling strategy specifically for sampling emitters
+                # which does not include sigma_f in the majorant, in order to reduce
+                # the number of loop iterations
+                tr_multiplier[active_medium] *= (mei.sigma_n + mei.sigma_f) / mei.combined_extinction
+            else:
+                tr_multiplier[active_medium] *= mei.sigma_n / mei.combined_extinction
+
+
+            # Handle interactions with surfaces
+            active_surface |= escaped_medium
+            active_surface &= si.is_valid() & ~active_medium
+            bsdf = si.bsdf(ray)
+            bsdf_val = bsdf.eval_null_transmission(si, active_surface)
+            tr_multiplier[active_surface] *= bsdf_val
+
+            if dr.hint(not is_primal and dr.grad_enabled(tr_multiplier), mode='scalar'):
+                active_adj = (active_surface | active_medium) & (tr_multiplier > 0.0)
+                dr.backward(tr_multiplier * dr.detach(dr.select(active_adj, δL * adj_emitted / tr_multiplier, 0.0)))
+
+            transmittance *= dr.detach(tr_multiplier)
+
+            # Update the ray with new origin & t parameter
+            ray[active_surface] = dr.detach(si.spawn_ray(mi.Vector3f(ray.d)))
+            ray.maxt = dr.detach(remaining_dist)
+            needs_intersection |= active_surface
+
+            # Continue tracing through scene if non-zero weights exist
+            active &= (active_medium | active_surface) & dr.any(transmittance != 0.0)
+            total_dist[active] += dr.select(active_medium, mei.t, si.t)
+
+            # If a medium transition is taking place: Update the medium pointer
+            has_medium_trans = active_surface & si.is_medium_transition()
+            medium[has_medium_trans] = si.target_medium(ray.d)
+
+        return emitter_val * dr.detach(transmittance), ds
+
+    def to_string(self):
+        return f'PRBVolpathIntegrator[max_depth = {self.max_depth}]'
+
+mi.register_integrator("prbvolpathfluoro", lambda props: PRBVolpathFluoroIntegrator(props))
+
+del RBIntegrator

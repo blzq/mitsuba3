@@ -32,6 +32,12 @@ public:
     get_scattering_coefficients(const MediumInteraction3f &mi,
                                 Mask active = true) const = 0;
 
+    virtual std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum,
+                       UnpolarizedSpectrum, UnpolarizedSpectrum,
+                       UnpolarizedSpectrum>
+    get_scattering_coefficients_fluoro(const MediumInteraction3f &mi,
+                                       Mask active = true) const;
+
     /**
      * \brief Sample a free-flight distance in the medium.
      *
@@ -50,8 +56,8 @@ public:
      *                 The MediumInteraction will always be valid,
      *                 except if the ray missed the Medium's bounding box.
      */
-    MediumInteraction3f sample_interaction(const Ray3f &ray, Float sample,
-                                           UInt32 channel, Mask active) const;
+    virtual MediumInteraction3f sample_interaction(const Ray3f &ray, Float sample,
+                                                   UInt32 channel, Mask active) const;
 
     /**
      * \brief Compute the transmittance and PDF
@@ -73,6 +79,30 @@ public:
                            const SurfaceInteraction3f &si,
                            Mask active) const;
 
+    /**
+     * \brief Sample wavelength shift for fluorescent scattering
+     *
+     * For fluorescent (wavelength-shifting) volumes, samples a
+     * random wavelength, associated excitation or fluorescence value, and
+     * associated Monte Carlo importance weight in order to decide the
+     * wavelength and strength of incoming excitation radiation or outgoing
+     * fluorescent radiation.
+     *
+     * For non-fluorescent volumes, it should return the original wavelength
+     * and a weight of 1, which is the default behaviour.
+     *
+     * \return
+     *  1. Set of sampled wavelengths specified in nanometers
+     *
+     *  2. The Monte Carlo importance weight (Spectral power distribution
+     *     of excitation value divided by the sampling density)
+     */
+    virtual std::pair<Wavelength, UnpolarizedSpectrum>
+    sample_wavelength_shift(const MediumInteraction3f &mi,
+                            Float sample,
+                            Mask active) const;
+
+
     /// Return the phase function of this medium
     MI_INLINE const PhaseFunction *phase_function() const {
         return m_phase_function.get();
@@ -88,6 +118,9 @@ public:
     MI_INLINE bool has_spectral_extinction() const {
         return m_has_spectral_extinction;
     }
+
+    /// Returns whether this medium has fluorescence
+    MI_INLINE bool has_fluorescence() const { return m_has_fluorescence; }
 
     void traverse(TraversalCallback *callback) override;
 
@@ -122,10 +155,12 @@ DRJIT_CALL_TEMPLATE_BEGIN(mitsuba::Medium)
     DRJIT_CALL_GETTER(use_emitter_sampling)
     DRJIT_CALL_GETTER(is_homogeneous)
     DRJIT_CALL_GETTER(has_spectral_extinction)
+    DRJIT_CALL_GETTER(has_fluorescence)
     DRJIT_CALL_METHOD(get_majorant)
     DRJIT_CALL_METHOD(intersect_aabb)
     DRJIT_CALL_METHOD(sample_interaction)
     DRJIT_CALL_METHOD(transmittance_eval_pdf)
+    DRJIT_CALL_METHOD(sample_wavelength_shift)
     DRJIT_CALL_METHOD(get_scattering_coefficients)
 DRJIT_CALL_END()
 

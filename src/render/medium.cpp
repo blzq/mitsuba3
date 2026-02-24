@@ -96,6 +96,14 @@ Medium<Float, Spectrum>::transmittance_eval_pdf(const MediumInteraction3f &mi,
     return { tr, pdf };
 }
 
+MI_VARIANT
+std::pair<typename Medium<Float, Spectrum>::Wavelength,
+          typename Medium<Float, Spectrum>::UnpolarizedSpectrum>
+Medium<Float, Spectrum>::sample_wavelength_shift(const MediumInteraction3f &mi,
+                                                 Float sample, Mask active) const {
+    return { mi.wavelengths, UnpolarizedSpectrum(1.f) && active };
+}
+
 MI_IMPLEMENT_TRAVERSE_CB(Medium, Object)
 MI_INSTANTIATE_CLASS(Medium)
 NAMESPACE_END(mitsuba)

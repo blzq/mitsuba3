@@ -564,6 +564,7 @@ struct MediumInteraction : Interaction<Float_, Spectrum_> {
     Vector3f wi;
 
     UnpolarizedSpectrum sigma_s, sigma_n, sigma_t, combined_extinction;
+    UnpolarizedSpectrum sigma_x, sigma_f;
 
     /// mint used when sampling the given distance ``t``
     Float mint;
@@ -587,6 +588,8 @@ struct MediumInteraction : Interaction<Float_, Spectrum_> {
         sigma_n             = dr::zeros<UnpolarizedSpectrum>(size);
         sigma_t             = dr::zeros<UnpolarizedSpectrum>(size);
         combined_extinction = dr::zeros<UnpolarizedSpectrum>(size);
+        sigma_x             = dr::zeros<UnpolarizedSpectrum>(size);
+        sigma_f             = dr::zeros<UnpolarizedSpectrum>(size);
         mint                = dr::zeros<Float>(size);
 
         if constexpr (dr::is_jit_v<Float_>) {
