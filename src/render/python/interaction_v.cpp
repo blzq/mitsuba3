@@ -108,6 +108,8 @@ MI_PY_EXPORT(MediumInteraction) {
         .def_field(MediumInteraction3f, sigma_s,    D(MediumInteraction, sigma_s))
         .def_field(MediumInteraction3f, sigma_n,    D(MediumInteraction, sigma_n))
         .def_field(MediumInteraction3f, sigma_t,    D(MediumInteraction, sigma_t))
+        .def_field(MediumInteraction3f, sigma_x,    D(MediumInteraction, sigma_x))
+        .def_field(MediumInteraction3f, sigma_f,    D(MediumInteraction, sigma_f))
         .def_field(MediumInteraction3f, combined_extinction, D(MediumInteraction, combined_extinction))
         .def_field(MediumInteraction3f, mint, D(MediumInteraction, mint))
 
@@ -120,7 +122,7 @@ MI_PY_EXPORT(MediumInteraction) {
 
     MI_PY_DRJIT_STRUCT(mi, MediumInteraction3f, t, time, wavelengths, p, n,
                        medium, sh_frame, wi, sigma_s, sigma_n, sigma_t,
-                       combined_extinction, mint)
+                       sigma_x, sigma_f, combined_extinction, mint)
 }
 
 MI_PY_EXPORT(PreliminaryIntersection) {

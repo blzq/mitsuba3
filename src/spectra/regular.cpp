@@ -154,7 +154,7 @@ public:
         return m_distr.integral() / (range[1] - range[0]);
     }
 
-    Float sum() const override {
+    Float sum(const SurfaceInteraction3f & /* si */, Mask /* active */) const override {
         return m_distr.integral();
     }
 
