@@ -120,7 +120,18 @@ public:
             return m_distr.eval_pdf_normalized(si.wavelengths, active);
         else {
             DRJIT_MARK_USED(si);
-            NotImplementedError("pdf");
+            NotImplementedError("eval_norm");
+        }
+    }
+
+    UnpolarizedSpectrum eval_scaled(const SurfaceInteraction3f &si, Mask active) const override {
+        MI_MASKED_FUNCTION(ProfilerPhase::TextureEvaluate, active);
+
+        if constexpr (is_spectral_v<Spectrum>)
+            return m_distr.eval_pdf(si.wavelengths, active) / m_distr.max();
+        else {
+            DRJIT_MARK_USED(si);
+            NotImplementedError("eval_scaled");
         }
     }
 
@@ -142,7 +153,7 @@ public:
         return m_distr.integral() / (range[1] - range[0]);
     }
 
-    Float sum() const override {
+    Float sum(const SurfaceInteraction3f & /* si */, Mask /* active */) const override {
         return m_distr.integral();
     }
 
