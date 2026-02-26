@@ -124,16 +124,16 @@ public:
         }
     }
 
-    UnpolarizedSpectrum eval_scaled(const SurfaceInteraction3f &si, Mask active) const override {
-        MI_MASKED_FUNCTION(ProfilerPhase::TextureEvaluate, active);
+    // UnpolarizedSpectrum eval_scaled(const SurfaceInteraction3f &si, Mask active) const override {
+    //     MI_MASKED_FUNCTION(ProfilerPhase::TextureEvaluate, active);
 
-        if constexpr (is_spectral_v<Spectrum>)
-            return m_distr.eval_pdf(si.wavelengths, active) / m_distr.max();
-        else {
-            DRJIT_MARK_USED(si);
-            NotImplementedError("eval_scaled");
-        }
-    }
+    //     if constexpr (is_spectral_v<Spectrum>)
+    //         return m_distr.eval_pdf(si.wavelengths, active) / m_distr.max();
+    //     else {
+    //         DRJIT_MARK_USED(si);
+    //         NotImplementedError("eval_scaled");
+    //     }
+    // }
 
     std::pair<Wavelength, UnpolarizedSpectrum> sample_spectrum(const SurfaceInteraction3f & /*si*/,
                                                                const Wavelength &sample,

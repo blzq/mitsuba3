@@ -5444,6 +5444,8 @@ static const char *__doc_mitsuba_MediumInteraction_sigma_t = R"doc()doc";
 
 static const char *__doc_mitsuba_MediumInteraction_to_local = R"doc(Convert a world-space vector into local shading coordinates (defined by `wi`))doc";
 
+static const char *__doc_mitsuba_MediumInteraction_sigma_f = R"doc()doc";
+
 static const char *__doc_mitsuba_MediumInteraction_to_world = R"doc(Convert a local shading-space (defined by `wi`) vector into world space)doc";
 
 static const char *__doc_mitsuba_MediumInteraction_wi = R"doc(Incident direction in world frame)doc";
@@ -5466,11 +5468,15 @@ R"doc(Returns the medium coefficients :math:`\sigma_s`, :math:`\sigma_n` and
 
 static const char *__doc_mitsuba_Medium_has_spectral_extinction = R"doc(Returns whether this medium has a spectrally varying extinction)doc";
 
+static const char *__doc_mitsuba_Medium_has_fluorescence = R"doc()doc";
+
 static const char *__doc_mitsuba_Medium_intersect_aabb = R"doc(Intersects a ray with the medium's bounding box)doc";
 
 static const char *__doc_mitsuba_Medium_is_homogeneous = R"doc(Returns whether this medium is homogeneous)doc";
 
 static const char *__doc_mitsuba_Medium_m_has_spectral_extinction = R"doc()doc";
+
+static const char *__doc_mitsuba_Medium_m_has_fluorescence = R"doc()doc";
 
 static const char *__doc_mitsuba_Medium_m_is_homogeneous = R"doc()doc";
 
@@ -5501,6 +5507,8 @@ Returns:
     This method returns a `MediumInteraction3f`.
     The MediumInteraction will always be valid,
     except if the ray missed the Medium's bounding box.)doc";
+
+static const char *__doc_mitsuba_Medium_sample_wavelength_shift = R"doc()doc";
 
 static const char *__doc_mitsuba_Medium_to_string = R"doc(Return a human-readable representation of the Medium)doc";
 

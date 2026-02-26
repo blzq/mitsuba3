@@ -144,9 +144,9 @@ public:
         m_is_homogeneous = false;
         m_has_fluorescence = true;
 
-        m_albedo = props.get_texture<Texture>("albedo", .3f);
-        m_excitation = props.get_texture<Texture>("excitation", .3f);
-        m_fluorescence = props.get_volume<Volume>("fluorescence", .5f);
+        m_albedo = props.get_volume<Volume>("albedo", .3f);
+        m_excitation = props.get_volume<Volume>("excitation", .3f);
+        m_sigmaf = props.get_volume<Volume>("fluorescence", .5f);
         // Absorption + scattering + fluorescent excitation
         m_sigmat = props.get_volume<Volume>("m_sigmat", 1.0f);
         
@@ -161,7 +161,7 @@ public:
         cb->put("albedo",       m_albedo,       ParamFlags::Differentiable);
         cb->put("sigma_t",      m_sigmat,       ParamFlags::Differentiable);
         cb->put("excitation",   m_excitation,   ParamFlags::Differentiable);
-        cb->put("fluorescence", m_fluorescence, ParamFlags::Differentiable);
+        cb->put("fluorescence", m_sigmaf,       ParamFlags::Differentiable);
         Base::traverse(cb);
     }
 
@@ -182,7 +182,7 @@ public:
         MI_MASKED_FUNCTION(ProfilerPhase::MediumEvaluate, active);
 
         auto sigmat = m_scale * (m_sigmat->eval(mi, active));
-        auto sigmaf = m_scale * (m_fluorescence->eval(mi, active));
+        auto sigmaf = m_scale * (m_sigmaf->eval(mi, active));
         if (has_flag(m_phase_function->flags(), PhaseFunctionFlags::Microflake)) {
             sigmat *= m_phase_function->projected_area(mi, active);
             sigmaf *= m_phase_function->projected_area(mi, active);
@@ -195,14 +195,13 @@ public:
         return { sigmas, sigman_null, sigmat };
     }
 
-    std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum,
-               UnpolarizedSpectrum, UnpolarizedSpectrum>
+    std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum>
     get_scattering_coefficients_fluoro(const MediumInteraction3f &mi,
-                                       Mask active) const {
+                                       Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::MediumEvaluate, active);
 
         auto sigmat = m_scale * (m_sigmat->eval(mi, active));
-        auto sigmaf = m_scale * (m_fluorescence->eval(mi, active));
+        auto sigmaf = m_scale * (m_sigmaf->eval(mi, active));
         if (has_flag(m_phase_function->flags(), PhaseFunctionFlags::Microflake)) {
             sigmat *= m_phase_function->projected_area(mi, active);
             sigmaf *= m_phase_function->projected_area(mi, active);
@@ -211,9 +210,8 @@ public:
         // Only the portion of sigman that represents null scattering
         auto sigman_null = m_max_density - sigmat - sigmaf;
         auto sigmas = sigmat * m_albedo->eval(mi, active);
-        auto sigmax = sigmat * m_excitation->eval(mi, active);
     
-        return { sigmas, sigman_null, sigmat, sigmax, sigmaf };
+        return { sigmas, sigman_null, sigmat, sigmaf };
     }
 
     MediumInteraction3f sample_interaction(const Ray3f &ray, Float sample,
@@ -253,7 +251,7 @@ public:
         mei.mint        = mint;
 
         std::tie(
-            mei.sigma_s, mei.sigma_n, mei.sigma_t, mei.sigma_x, mei.sigma_f
+            mei.sigma_s, mei.sigma_n, mei.sigma_t, mei.sigma_f
         ) = get_scattering_coefficients_fluoro(mei, valid_mi);
         mei.combined_extinction = combined_extinction;
         return mei;
@@ -261,13 +259,12 @@ public:
 
     std::pair<Wavelength, UnpolarizedSpectrum>
     sample_wavelength_shift(const MediumInteraction3f &mi,
-                            Float sample, Mask active) const {
+                            Float sample, Mask active) const override {
         // Only support paths from camera to light (TransportMode::Radiance)
-        UnpolarizedSpectrum spectrum = mi.sigma_x;
-        auto [wavelengths, weight] = spectrum->sample_spectrum(
+        auto [wavelengths, weight] = m_excitation->sample_spectrum(
             mi, math::sample_shifted<Wavelength>(sample), active);
 
-        return { wavelengths, weight };
+        return { wavelengths, mi.sigma_t * weight };
     }
 
     std::tuple<Mask, Float, Float>
@@ -280,7 +277,7 @@ public:
         oss << "HeterogeneousFluoroMedium[" << std::endl
             << "  albedo       = " << string::indent(m_albedo) << std::endl
             << "  excitation   = " << string::indent(m_excitation) << std::endl
-            << "  fluorescence = " << string::indent(m_fluorescence) << std::endl
+            << "  fluorescence = " << string::indent(m_sigmaf) << std::endl
             << "  sigma_t      = " << string::indent(m_sigmat) << std::endl
             << "  scale        = " << string::indent(m_scale) << std::endl
             << "]";
@@ -289,11 +286,11 @@ public:
 
     MI_DECLARE_CLASS(HeterogeneousFluoroMedium)
 private:
-    ref<Volume> m_albedo, m_excitation, m_fluorescence, m_sigmat;
+    ref<Volume> m_albedo, m_excitation, m_sigmat, m_sigmaf;
     ScalarFloat m_scale;
     Float m_max_density;
 
-    MI_TRAVERSE_CB(Base, m_sigmat, m_albedo, m_excitation, m_fluorescence, m_max_density)
+    MI_TRAVERSE_CB(Base, m_sigmat, m_albedo, m_excitation, m_sigmaf, m_max_density)
 };
 
 MI_EXPORT_PLUGIN(HeterogeneousFluoroMedium)

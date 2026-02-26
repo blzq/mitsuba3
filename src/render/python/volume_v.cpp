@@ -44,6 +44,13 @@ public:
         NB_OVERRIDE_PURE(eval_gradient, it, active);
     }
 
+    std::pair<Wavelength, UnpolarizedSpectrum>
+    sample_spectrum(const Interaction3f &it,
+                    const Wavelength &sample,
+                    Mask active) const override {
+        NB_OVERRIDE(sample_spectrum, it, sample, active);
+    }
+
     ScalarFloat max() const override {
         NB_OVERRIDE_PURE(max);
     }
@@ -103,7 +110,13 @@ MI_PY_EXPORT(Volume) {
                 return evaluation;
             },
             "it"_a, "active"_a = true,
-            D(Volume, eval_n));
+            D(Volume, eval_n))
+        .def("sample_spectrum",
+             [](const Volume *volume, const Interaction3f &it,
+                const Wavelength &sample, Mask active) {
+                    return volume->sample_spectrum(it, sample, active);
+             }, "it"_a, "sample"_a, "active"_a = true,
+             D(Texture, sample_spectrum));
 
     drjit::bind_traverse(volume);
 }
