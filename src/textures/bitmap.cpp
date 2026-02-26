@@ -711,7 +711,7 @@ public:
 
     Float mean() const override { return m_mean; }
 
-    Float sum(const SurfaceInteraction3f &si, Mask active) const override {
+    Float sum(const SurfaceInteraction3f & /* si */, Mask /* active */) const override {
         // TODO
         /* This should evaluate the texture at the position given by si,
            but return the integral of the whole spectrum at that point

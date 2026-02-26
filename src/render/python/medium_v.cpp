@@ -15,7 +15,7 @@
 MI_VARIANT class PyMedium : public Medium<Float, Spectrum> {
 public:
     MI_IMPORT_TYPES(Medium, Sampler, Scene)
-    NB_TRAMPOLINE(Medium, 6);
+    NB_TRAMPOLINE(Medium, 9);
 
     PyMedium(const Properties &props) : Medium(props) {}
 
@@ -28,7 +28,7 @@ public:
     }
 
     MediumInteraction3f sample_interaction(const Ray3f &ray, Float sample, UInt32 channel, Mask active) const override {
-        NB_OVERRIDE_PURE(sample_interaction, ray, sample, channel, active);
+        NB_OVERRIDE(sample_interaction, ray, sample, channel, active);
     }
 
     std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum>
@@ -36,15 +36,14 @@ public:
         NB_OVERRIDE_PURE(get_scattering_coefficients, mi, active);
     }
 
-    std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum,
-               UnpolarizedSpectrum, UnpolarizedSpectrum>
+    std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum>
     get_scattering_coefficients_fluoro(const MediumInteraction3f &mi, Mask active = true) const override {
         NB_OVERRIDE_PURE(get_scattering_coefficients_fluoro, mi, active);
     }
 
     std::pair<Wavelength, UnpolarizedSpectrum>
     sample_wavelength_shift(const MediumInteraction3f &mi, Float sample, Mask active) const override {
-        NB_OVERRIDE_PURE(sample_wavelength_shift, mi, sample, active);
+        NB_OVERRIDE(sample_wavelength_shift, mi, sample, active);
     }
 
     std::string to_string() const override {
@@ -109,9 +108,9 @@ template <typename Ptr, typename Cls> void bind_medium_generic(Cls &cls) {
             "mi"_a, "si"_a, "active"_a,
             D(Medium, transmittance_eval_pdf))
        .def("sample_wavelength_shift",
-            [](Ptr ptr, const SurfaceInteraction3f &si,
+            [](Ptr ptr, const MediumInteraction3f &mi,
                Float sample, Mask active) {
-                return ptr->sample_wavelength_shift(si, sample, active); },
+                return ptr->sample_wavelength_shift(mi, sample, active); },
             "si"_a, "sample"_a, "active"_a,
             D(Medium, sample_wavelength_shift))
        .def("get_scattering_coefficients",
