@@ -20,7 +20,7 @@ public:
     // ======================================================================
 
     /// Evaluate the volume at the given surface interaction, with color processing.
-    virtual UnpolarizedSpectrum eval(const Interaction3f &it, Mask active = true) const;
+virtual UnpolarizedSpectrum eval(const Interaction3f &it, Mask active = true) const;
 
     /// Evaluate this volume as a single-channel quantity.
     virtual Float eval_1(const Interaction3f &it, Mask active = true) const;
@@ -48,6 +48,27 @@ public:
      */
     virtual std::pair<UnpolarizedSpectrum, Vector3f> eval_gradient(const Interaction3f &it,
                                                                    Mask active = true) const;
+
+    /**
+     * \brief Importance sample a set of wavelengths proportional to the
+     * spectrum defined at the given medium location. 
+     * (Volume analogue to sample_spectrum() in bsdf.h)
+     *
+     * \param it
+     *     An interaction record describing the associated medium location
+     *
+     * \param sample
+     *     A uniform variate for each desired wavelength.
+     *
+     * \return
+     *     1. Set of sampled wavelengths specified in nanometers
+     *
+     *     2. The Monte Carlo importance weight (Spectral power
+     *        distribution value divided by the sampling density)
+     */
+    virtual std::pair<Wavelength, UnpolarizedSpectrum> sample_spectrum(const Interaction3f &it,
+                                                                       const Wavelength &sample,
+                                                                       Mask active = true) const;
 
     /// Returns the maximum value of the volume over all dimensions.
     virtual ScalarFloat max() const;

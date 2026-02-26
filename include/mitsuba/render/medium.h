@@ -31,10 +31,12 @@ public:
                        UnpolarizedSpectrum>
     get_scattering_coefficients(const MediumInteraction3f &mi,
                                 Mask active = true) const = 0;
-
+    
+    /// Returns the medium coefficients Sigma_s, Sigma_n, Sigma_t and Sigma_f 
+    /// evaluated at a given MediumInteraction mi
+    /// Only implemented for fluorescent media, default implementation throws an error
     virtual std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum,
-                       UnpolarizedSpectrum, UnpolarizedSpectrum,
-                       UnpolarizedSpectrum>
+                       UnpolarizedSpectrum, UnpolarizedSpectrum>
     get_scattering_coefficients_fluoro(const MediumInteraction3f &mi,
                                        Mask active = true) const;
 
@@ -162,6 +164,7 @@ DRJIT_CALL_TEMPLATE_BEGIN(mitsuba::Medium)
     DRJIT_CALL_METHOD(transmittance_eval_pdf)
     DRJIT_CALL_METHOD(sample_wavelength_shift)
     DRJIT_CALL_METHOD(get_scattering_coefficients)
+    DRJIT_CALL_METHOD(get_scattering_coefficients_fluoro)
 DRJIT_CALL_END()
 
 //! @}

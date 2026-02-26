@@ -13,7 +13,7 @@
 MI_VARIANT class PyTexture : public Texture<Float, Spectrum> {
 public:
     MI_IMPORT_TYPES(Texture)
-    NB_TRAMPOLINE(Texture, 17);
+    NB_TRAMPOLINE(Texture, 19);
 
     PyTexture(const Properties &props) : Texture(props) {}
 
@@ -37,11 +37,6 @@ public:
     UnpolarizedSpectrum eval_norm(const SurfaceInteraction3f &si,
                                   Mask active = true) const override {
         NB_OVERRIDE_PURE(eval_norm, si, active);
-    }
-
-    UnpolarizedSpectrum eval_scaled(const SurfaceInteraction3f &si,
-                                    Mask active = true) const override {
-        NB_OVERRIDE_PURE(eval_scaled, si, active);
     }
 
     std::pair<Point2f, Float>
@@ -73,8 +68,8 @@ public:
         NB_OVERRIDE_PURE(mean);
     }
 
-    Float sum() const override {
-        NB_OVERRIDE_PURE(sum);
+    Float sum(const SurfaceInteraction3f &si, Mask active) const override {
+        NB_OVERRIDE_PURE(sum, si, active);
     }
 
     ScalarFloat max() const override {
@@ -146,12 +141,6 @@ template <typename Ptr, typename Cls> void bind_texture_generic(Cls &cls) {
                  return texture->eval_norm(si, active);
              }, "si"_a, "active"_a = true,
              D(Texture, eval_norm))
-        .def("eval_scaled",
-             [](Ptr texture, const SurfaceInteraction3f &si,
-                Mask active) {
-                 return texture->eval_scaled(si, active);
-             }, "si"_a, "active"_a = true,
-             D(Texture, eval_scaled))
         .def("sample_position",
              [](Ptr texture, const Point2f &sample,
                 Mask active) {
@@ -172,7 +161,8 @@ template <typename Ptr, typename Cls> void bind_texture_generic(Cls &cls) {
              [](Ptr texture) { return texture->mean(); },
              D(Texture, mean))
         .def("sum",
-             [](Ptr texture) { return texture->sum(); },
+             [](Ptr texture, const SurfaceInteraction3f &si,
+                Mask active) { return texture->sum(si, active); },
              D(Texture, sum))
         .def("max",
              [](Ptr texture) { return texture->max(); },

@@ -49,6 +49,30 @@ Volume<Float, Spectrum>::eval_gradient(const Interaction3f & /*it*/, Mask /*acti
     NotImplementedError("eval_gradient");
 }
 
+MI_VARIANT std::pair<typename Volume<Float, Spectrum>::Wavelength,
+                     typename Volume<Float, Spectrum>::UnpolarizedSpectrum>
+Volume<Float, Spectrum>::sample_spectrum(const Interaction3f &_it,
+                                         const Wavelength &sample,
+                                         Mask active) const {
+    MI_MASKED_FUNCTION(ProfilerPhase::TextureSample, active);
+
+    if (dr::none_or<false>(active))
+        return { dr::zeros<Wavelength>(), dr::zeros<UnpolarizedSpectrum>() };
+
+    if constexpr (is_spectral_v<Spectrum>) {
+        Interaction3f it(_it);
+        // Uniform sample - not proportional to local spectral distribution
+        it.wavelengths = MI_CIE_MIN + (MI_CIE_MAX - MI_CIE_MIN) * sample;
+        // importance weight accounts for uniform sample
+        return { it.wavelengths,
+                 eval(it, active) * (MI_CIE_MAX - MI_CIE_MIN) };
+    } else {
+        DRJIT_MARK_USED(sample);
+        UnpolarizedSpectrum value = eval(_it, active);
+        return { dr::empty<Wavelength>(), value };
+    }
+}
+
 MI_VARIANT typename Volume<Float, Spectrum>::ScalarFloat
 Volume<Float, Spectrum>::max() const { NotImplementedError("max"); }
 
