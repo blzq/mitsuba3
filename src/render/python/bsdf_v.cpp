@@ -35,7 +35,7 @@ MI_PY_EXPORT(BSDFSample) {
 MI_VARIANT class PyBSDF : public BSDF<Float, Spectrum> {
 public:
     MI_IMPORT_TYPES(BSDF)
-    NB_TRAMPOLINE(BSDF, 12);
+    NB_TRAMPOLINE(BSDF, 16);
 
     PyBSDF(const Properties &props) : BSDF(props) { }
 
@@ -57,7 +57,7 @@ public:
                          const SurfaceInteraction3f &si,
                          const Vector3f &wo,
                          Mask active) const override {
-        NB_OVERRIDE_PURE(eval_fluoro, ctx, si, wo, active);
+        NB_OVERRIDE(eval_fluoro, ctx, si, wo, active);
     }
 
     Float pdf(const BSDFContext &ctx,
@@ -87,7 +87,7 @@ public:
     }
 
     std::pair<Wavelength, UnpolarizedSpectrum> sample_wavelength_shift(
-        const BSDFContext &ctx, const SurfaceInteraction3f &si, 
+        const BSDFContext &ctx, const SurfaceInteraction3f &si,
         Float sample, Mask active) const override {
         NB_OVERRIDE(sample_wavelength_shift, ctx, si, sample, active);
     }

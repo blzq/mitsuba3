@@ -39,6 +39,16 @@ MI_VARIANT void Medium<Float, Spectrum>::traverse(TraversalCallback *cb) {
 }
 
 MI_VARIANT
+std::tuple<typename Medium<Float, Spectrum>::UnpolarizedSpectrum,
+           typename Medium<Float, Spectrum>::UnpolarizedSpectrum,
+           typename Medium<Float, Spectrum>::UnpolarizedSpectrum,
+           typename Medium<Float, Spectrum>::UnpolarizedSpectrum>
+Medium<Float, Spectrum>::get_scattering_coefficients_fluoro(const MediumInteraction3f &mi,
+                                                            Mask active) const {
+    NotImplementedError("get_scattering_coefficients_fluoro");                                                             
+}
+
+MI_VARIANT
 typename Medium<Float, Spectrum>::MediumInteraction3f
 Medium<Float, Spectrum>::sample_interaction(const Ray3f &ray, Float sample,
                                             UInt32 channel, Mask active) const {
