@@ -7468,7 +7468,7 @@ R"doc(Retrieve a texture parameter (internal method)
 
 This method exposes a low level interface for texture construction, in
 general get_texture(), get_emissive_texture(), and
-get_unbounded_texture() are preferable.
+() are preferable.
 
 The method retrieves or construct a texture object (a subclass of
 ``mitsuba::Texture<...>``).
