@@ -43,8 +43,8 @@ std::tuple<typename Medium<Float, Spectrum>::UnpolarizedSpectrum,
            typename Medium<Float, Spectrum>::UnpolarizedSpectrum,
            typename Medium<Float, Spectrum>::UnpolarizedSpectrum,
            typename Medium<Float, Spectrum>::UnpolarizedSpectrum>
-Medium<Float, Spectrum>::get_scattering_coefficients_fluoro(const MediumInteraction3f &mi,
-                                                            Mask active) const {
+Medium<Float, Spectrum>::get_scattering_coefficients_fluoro(const MediumInteraction3f &/* mi */,
+                                                            Mask /* active */) const {
     NotImplementedError("get_scattering_coefficients_fluoro");                                                             
 }
 
@@ -110,7 +110,7 @@ MI_VARIANT
 std::pair<typename Medium<Float, Spectrum>::Wavelength,
           typename Medium<Float, Spectrum>::UnpolarizedSpectrum>
 Medium<Float, Spectrum>::sample_wavelength_shift(const MediumInteraction3f &mi,
-                                                 Float sample, Mask active) const {
+                                                 Float /* sample */, Mask active) const {
     return { mi.wavelengths, UnpolarizedSpectrum(1.f) && active };
 }
 
