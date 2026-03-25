@@ -20,7 +20,7 @@ public:
     // ======================================================================
 
     /// Evaluate the volume at the given surface interaction, with color processing.
-virtual UnpolarizedSpectrum eval(const Interaction3f &it, Mask active = true) const;
+    virtual UnpolarizedSpectrum eval(const Interaction3f &it, Mask active = true) const;
 
     /// Evaluate this volume as a single-channel quantity.
     virtual Float eval_1(const Interaction3f &it, Mask active = true) const;
@@ -51,7 +51,7 @@ virtual UnpolarizedSpectrum eval(const Interaction3f &it, Mask active = true) co
 
     /**
      * \brief Importance sample a set of wavelengths proportional to the
-     * spectrum defined at the given medium location. 
+     * spectrum defined at the given medium location.
      * (Volume analogue to sample_spectrum() in bsdf.h)
      *
      * \param it

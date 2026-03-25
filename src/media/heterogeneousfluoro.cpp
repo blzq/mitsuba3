@@ -148,7 +148,7 @@ public:
         m_excitation = props.get_volume<Volume>("excitation", .3f);
         m_sigmaf = props.get_volume<Volume>("fluorescence", .5f);
         // Absorption + scattering + fluorescent excitation
-        m_sigmat = props.get_volume<Volume>("m_sigmat", 1.0f);
+        m_sigmat = props.get_volume<Volume>("sigma_t", 1.0f);
         
         m_scale = props.get<ScalarFloat>("scale", 1.0f);
         m_has_spectral_extinction = props.get<bool>("has_spectral_extinction", true);
@@ -269,6 +269,7 @@ public:
 
     std::tuple<Mask, Float, Float>
     intersect_aabb(const Ray3f &ray) const override {
+        // TODO: needs to be bbox of everything
         return m_sigmat->bbox().ray_intersect(ray);
     }
 

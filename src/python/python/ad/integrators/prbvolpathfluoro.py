@@ -178,7 +178,24 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
                 # Handle null and real scatter events
                 if dr.hint(self.handle_null_scattering, mode='scalar'):
                     if medium.has_fluorescence():
-                        scatter_prob = dr.mean((mei.sigma_t + mei.sigma_f) / mei.combined_extinction)
+                        # Avg based probabliities
+                        # scatter_prob = dr.mean((mei.sigma_t + mei.sigma_f) / mei.combined_extinction)
+                        # Max based probabilities
+                        # scattering_max = dr.max(mei.sigma_t + mei.sigma_f)
+                        # combined_extinction_max = scattering_max + dr.max(mei.sigma_n)
+                        # scatter_prob = scattering_max / combined_extinction_max
+
+                        # alternative based on spectral decomposition paper (path throughput)
+                        # p_t = dr.mean(throughput * (mei.sigma_t + mei.sigma_f))
+                        # p_n = dr.mean(throughput * mei.sigma_n)
+                        # c = p_t + p_n
+                        # scatter_prob = p_t / c
+                        # New alternative - exclude absorption
+                        p_s = dr.mean(throughput * mei.sigma_s)
+                        p_f = dr.mean(throughput * mei.sigma_f)
+                        p_n = dr.mean(throughput * mei.sigma_n)
+                        c = p_s + p_f + p_n
+                        scatter_prob = (p_s + p_f) / c
                     else:
                         scatter_prob = dr.mean(mei.sigma_t / mei.combined_extinction)
                     act_null_scatter = (sampler.next_1d(active_medium) >= scatter_prob) & active_medium
@@ -199,16 +216,22 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
                     si.t[act_null_scatter] = si.t - dr.detach(mei.t)
 
                 if medium.has_fluorescence():
-                    fluoro_prob = dr.mean(mei.sigma_f / (mei.sigma_f + mei.sigma_t))
+                    # Test: mean or max (or something else) for better results?
+                    # fluoro_prob = dr.max(mei.sigma_f / (mei.sigma_f + mei.sigma_t))
+                    p_s = dr.mean(throughput * mei.sigma_s)
+                    p_f = dr.mean(throughput * mei.sigma_f)
+                    fluoro_prob = p_f / (p_f + p_s)
                     act_normal_scatter = (sampler.next_1d(act_medium_scatter) >= fluoro_prob) & act_medium_scatter
                     act_fluoro_scatter = ~act_normal_scatter & act_medium_scatter
-                    # TODO Check if this is right: Compare with PRB paper
-                    weight[act_fluoro_scatter] *= mei.sigma_f / (dr.detach(scatter_prob * fluoro_prob))
-                    weight[act_normal_scatter] *= mei.sigma_s / (dr.detach(scatter_prob * (1 - fluoro_prob)))
+                    # TODO Check if this is right
+                    weight[act_fluoro_scatter] *= 1.0 / dr.maximum(1e-8, dr.detach(fluoro_prob))
+                    weight[act_normal_scatter] *= 1.0 / dr.maximum(1e-8, dr.detach(1.0 - fluoro_prob))
+                    weight[act_fluoro_scatter] *= mei.sigma_f / dr.detach(scatter_prob)
+                    weight[act_normal_scatter] *= mei.sigma_s / dr.detach(scatter_prob)
                     # Shift wavelength of ray for fluorescent medium interaction
                     med_fluoro_wavelengths, med_fluoro_weight = medium.sample_wavelength_shift(
                         mei, sampler.next_1d(act_fluoro_scatter), act_fluoro_scatter)
-                    mei[act_fluoro_scatter].wavelengths = med_fluoro_wavelengths
+                    mei.wavelengths[act_fluoro_scatter] = med_fluoro_wavelengths
                     weight[act_fluoro_scatter] *= med_fluoro_weight
                 else:
                     weight[act_medium_scatter] *= mei.sigma_s / dr.detach(scatter_prob)
@@ -306,7 +329,7 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
                     # Query the BSDF for that emitter-sampled direction
                     bsdf_val, bsdf_pdf = dr.select(
                         is_fluoro_surf,
-                        excite_weight * bsdf.eval_pdf_fluoro(ctx, si, si.to_local(ds.d), active_e_surface),
+                        bsdf.eval_pdf_fluoro(ctx, si, si.to_local(ds.d), active_e_surface),
                         bsdf.eval_pdf(ctx, si, si.to_local(ds.d), active_e_surface)
                     )
                     bsdf_val *= excite_weight
@@ -447,14 +470,15 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
             active_medium &= mei.is_valid()
             ray.o[active_medium] = dr.detach(mei.p)
             si.t[active_medium] = dr.detach(si.t - mei.t)
-            if medium.has_fluorescence():
-                # TODO: Introduce sampling strategy specifically for sampling emitters
-                # which does not include sigma_f in the majorant, in order to reduce
-                # the number of loop iterations
-                tr_multiplier[active_medium] *= (mei.sigma_n + mei.sigma_f) / mei.combined_extinction
-            else:
-                tr_multiplier[active_medium] *= mei.sigma_n / mei.combined_extinction
-
+            # if medium.has_fluorescence():
+            #     # TODO: Is this right? (including sigma_f)
+            #     # Introduce sampling strategy specifically for sampling emitters
+            #     # which does not include sigma_f in the majorant, in order to reduce
+            #     # the number of loop iterations
+            #     tr_multiplier[active_medium] *= (mei.sigma_n + mei.sigma_f) / mei.combined_extinction
+            # else:
+            #     tr_multiplier[active_medium] *= mei.sigma_n / mei.combined_extinction
+            tr_multiplier[active_medium] *= mei.sigma_n / mei.combined_extinction
 
             # Handle interactions with surfaces
             active_surface |= escaped_medium

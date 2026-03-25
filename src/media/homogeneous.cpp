@@ -161,7 +161,7 @@ public:
     get_majorant(const MediumInteraction3f &mi,
                  Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::MediumEvaluate, active);
-        return eval_sigmat(mi, active) & active;
+        return (eval_sigmat(mi, active) & active) + dr::Epsilon<UnpolarizedSpectrum>;
     }
 
     std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum>
