@@ -5448,6 +5448,8 @@ static const char *__doc_mitsuba_MediumInteraction_sigma_f = R"doc()doc";
 
 static const char *__doc_mitsuba_MediumInteraction_to_world = R"doc(Convert a local shading-space (defined by `wi`) vector into world space)doc";
 
+static const char *__doc_mitsuba_MediumInteraction_sigma_x = R"doc()doc";
+
 static const char *__doc_mitsuba_MediumInteraction_wi = R"doc(Incident direction in world frame)doc";
 
 static const char *__doc_mitsuba_MediumInteraction_zero =

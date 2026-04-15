@@ -42,7 +42,8 @@ MI_VARIANT
 std::tuple<typename Medium<Float, Spectrum>::UnpolarizedSpectrum,
            typename Medium<Float, Spectrum>::UnpolarizedSpectrum,
            typename Medium<Float, Spectrum>::UnpolarizedSpectrum,
-           typename Medium<Float, Spectrum>::UnpolarizedSpectrum>
+           typename Medium<Float, Spectrum>::UnpolarizedSpectrum,
+           Float>
 Medium<Float, Spectrum>::get_scattering_coefficients_fluoro(const MediumInteraction3f &/* mi */,
                                                             Mask /* active */) const {
     NotImplementedError("get_scattering_coefficients_fluoro");                                                             

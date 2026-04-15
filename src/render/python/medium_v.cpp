@@ -36,7 +36,7 @@ public:
         NB_OVERRIDE_PURE(get_scattering_coefficients, mi, active);
     }
 
-    std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum>
+    std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum, Float>
     get_scattering_coefficients_fluoro(const MediumInteraction3f &mi, Mask active = true) const override {
         NB_OVERRIDE_PURE(get_scattering_coefficients_fluoro, mi, active);
     }

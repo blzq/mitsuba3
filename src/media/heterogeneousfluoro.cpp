@@ -145,23 +145,29 @@ public:
         m_has_fluorescence = true;
 
         m_albedo = props.get_volume<Volume>("albedo", .3f);
+        // A mono value representing the spatial excitation strength per voxel
         m_excitation = props.get_volume<Volume>("excitation", .3f);
         m_sigmaf = props.get_volume<Volume>("fluorescence", .5f);
         // Absorption + scattering + fluorescent excitation
         m_sigmat = props.get_volume<Volume>("sigma_t", 1.0f);
         
+        // A (regular or irregular) spectrum representing the relative excitation strength per wavelength
+        m_excitation_spectrum = props.get_texture<Texture>("excitation_spectrum", .5f);
         m_scale = props.get<ScalarFloat>("scale", 1.0f);
         m_has_spectral_extinction = props.get<bool>("has_spectral_extinction", true);
 
         m_max_density = dr::opaque<Float>(m_scale * (m_sigmat->max() + m_sigmaf->max()));
+
+        m_bbox = ScalarBoundingBox3f().merge(m_sigmat->bbox(), m_sigmaf->bbox());
     }
 
     void traverse(TraversalCallback *cb) override {
-        cb->put("scale",        m_scale,        ParamFlags::NonDifferentiable);
-        cb->put("albedo",       m_albedo,       ParamFlags::Differentiable);
-        cb->put("sigma_t",      m_sigmat,       ParamFlags::Differentiable);
-        cb->put("excitation",   m_excitation,   ParamFlags::Differentiable);
-        cb->put("fluorescence", m_sigmaf,       ParamFlags::Differentiable);
+        cb->put("scale",               m_scale,               ParamFlags::NonDifferentiable);
+        cb->put("albedo",              m_albedo,              ParamFlags::Differentiable);
+        cb->put("sigma_t",             m_sigmat,              ParamFlags::Differentiable);
+        cb->put("excitation",          m_excitation,          ParamFlags::Differentiable);
+        cb->put("excitation_spectrum", m_excitation_spectrum, ParamFlags::Differentiable);
+        cb->put("fluorescence",        m_sigmaf,              ParamFlags::Differentiable);
         Base::traverse(cb);
     }
 
@@ -181,37 +187,39 @@ public:
                                 Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::MediumEvaluate, active);
 
-        auto sigmat = m_scale * (m_sigmat->eval(mi, active));
-        auto sigmaf = m_scale * (m_sigmaf->eval(mi, active));
+        UnpolarizedSpectrum sigmat = m_scale * (m_sigmat->eval(mi, active));
+        UnpolarizedSpectrum sigmaf = m_scale * (m_sigmaf->eval(mi, active));
         if (has_flag(m_phase_function->flags(), PhaseFunctionFlags::Microflake)) {
             sigmat *= m_phase_function->projected_area(mi, active);
             sigmaf *= m_phase_function->projected_area(mi, active);
         }
 
         // Only the portion of sigman that represents null scattering
-        auto sigman_null = m_max_density - sigmat - sigmaf;
-        auto sigmas = sigmat * m_albedo->eval(mi, active);
+        UnpolarizedSpectrum sigman_null = m_max_density - sigmat - sigmaf;
+        UnpolarizedSpectrum sigmas = sigmat * m_albedo->eval(mi, active);
     
         return { sigmas, sigman_null, sigmat };
     }
 
-    std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum>
+    std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum,
+               UnpolarizedSpectrum, Float>
     get_scattering_coefficients_fluoro(const MediumInteraction3f &mi,
                                        Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::MediumEvaluate, active);
 
-        auto sigmat = m_scale * (m_sigmat->eval(mi, active));
-        auto sigmaf = m_scale * (m_sigmaf->eval(mi, active));
+        UnpolarizedSpectrum sigmat = m_scale * (m_sigmat->eval(mi, active));
+        UnpolarizedSpectrum sigmaf = m_scale * (m_sigmaf->eval(mi, active));
         if (has_flag(m_phase_function->flags(), PhaseFunctionFlags::Microflake)) {
             sigmat *= m_phase_function->projected_area(mi, active);
             sigmaf *= m_phase_function->projected_area(mi, active);
         }
 
         // Only the portion of sigman that represents null scattering
-        auto sigman_null = m_max_density - sigmat - sigmaf;
-        auto sigmas = sigmat * m_albedo->eval(mi, active);
+        UnpolarizedSpectrum sigman_null = m_max_density - sigmat - sigmaf;
+        UnpolarizedSpectrum sigmas = sigmat * m_albedo->eval(mi, active);
+        Float sigmax = m_excitation->eval_1(mi, active);
     
-        return { sigmas, sigman_null, sigmat, sigmaf };
+        return { sigmas, sigman_null, sigmat, sigmaf, sigmax };
     }
 
     MediumInteraction3f sample_interaction(const Ray3f &ray, Float sample,
@@ -251,7 +259,7 @@ public:
         mei.mint        = mint;
 
         std::tie(
-            mei.sigma_s, mei.sigma_n, mei.sigma_t, mei.sigma_f
+            mei.sigma_s, mei.sigma_n, mei.sigma_t, mei.sigma_f, mei.sigma_x
         ) = get_scattering_coefficients_fluoro(mei, valid_mi);
         mei.combined_extinction = combined_extinction;
         return mei;
@@ -261,16 +269,32 @@ public:
     sample_wavelength_shift(const MediumInteraction3f &mi,
                             Float sample, Mask active) const override {
         // Only support paths from camera to light (TransportMode::Radiance)
-        auto [wavelengths, weight] = m_excitation->sample_spectrum(
-            mi, math::sample_shifted<Wavelength>(sample), active);
 
-        return { wavelengths, mi.sigma_t * weight };
+        // Position of mi is unused since excitation spectrum is assumed to be 
+        // the same (but scaled) throughout the medium
+        SurfaceInteraction3f si = dr::zeros<SurfaceInteraction3f>();
+        
+        auto [wavelengths, weight] = m_excitation_spectrum->sample_spectrum(
+            si, math::sample_shifted<Wavelength>(sample), active);
+        // The absolute values of the spectrum are not used, only the shape
+        // (i.e. force the spectrum to have unit integral)
+        weight /= m_excitation_spectrum->sum(si, active);
+
+        // Evaluate sigma_t at the interaction point for the post-shift wavelengths 
+        // TODO move this to sample_interaction() for efficiency?
+        MediumInteraction3f shifted_mi(mi);
+        shifted_mi.wavelengths = wavelengths;
+        UnpolarizedSpectrum shifted_sigmat = m_scale * (m_sigmat->eval(shifted_mi, active));
+        if (has_flag(m_phase_function->flags(), PhaseFunctionFlags::Microflake)) {
+            shifted_sigmat *= m_phase_function->projected_area(mi, active);
+        }
+
+        return { wavelengths, shifted_sigmat * mi.sigma_x * weight };
     }
 
     std::tuple<Mask, Float, Float>
     intersect_aabb(const Ray3f &ray) const override {
-        // TODO: needs to be bbox of everything
-        return m_sigmat->bbox().ray_intersect(ray);
+        return m_bbox.ray_intersect(ray);
     }
 
     std::string to_string() const override {
@@ -288,8 +312,11 @@ public:
     MI_DECLARE_CLASS(HeterogeneousFluoroMedium)
 private:
     ref<Volume> m_albedo, m_excitation, m_sigmat, m_sigmaf;
+    ref<Texture> m_excitation_spectrum;
     ScalarFloat m_scale;
     Float m_max_density;
+
+    ScalarBoundingBox3f m_bbox;
 
     MI_TRAVERSE_CB(Base, m_sigmat, m_albedo, m_excitation, m_sigmaf, m_max_density)
 };
