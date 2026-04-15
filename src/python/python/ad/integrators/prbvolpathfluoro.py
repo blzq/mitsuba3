@@ -179,30 +179,26 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
                 if dr.hint(self.handle_null_scattering, mode='scalar'):
                     if medium.has_fluorescence():
                         # Avg based probabliities
-                        # scatter_prob = dr.mean((mei.sigma_t + mei.sigma_f) / mei.combined_extinction)
+                        # total_scatter_prob = dr.mean((mei.sigma_t + mei.sigma_f) / mei.combined_extinction)
                         # Max based probabilities
                         # scattering_max = dr.max(mei.sigma_t + mei.sigma_f)
                         # combined_extinction_max = scattering_max + dr.max(mei.sigma_n)
-                        # scatter_prob = scattering_max / combined_extinction_max
+                        # total_scatter_prob = scattering_max / combined_extinction_max
 
                         # alternative based on spectral decomposition paper (path throughput)
-                        # p_t = dr.mean(throughput * (mei.sigma_t + mei.sigma_f))
-                        # p_n = dr.mean(throughput * mei.sigma_n)
-                        # c = p_t + p_n
-                        # scatter_prob = p_t / c
-                        # New alternative - exclude absorption
-                        p_s = dr.mean(throughput * mei.sigma_s)
-                        p_f = dr.mean(throughput * mei.sigma_f)
-                        p_n = dr.mean(throughput * mei.sigma_n)
-                        c = p_s + p_f + p_n
-                        scatter_prob = (p_s + p_f) / c
+                        # https://media.disneyanimation.com/uploads/production/publication_asset/158/asset/SpectralAndDecompositionTracking.pdf
+                        p_scatter = dr.mean(throughput * mei.sigma_s)
+                        p_fluoro = dr.mean(throughput * mei.sigma_f)
+                        p_null = dr.mean(throughput * mei.sigma_n)
+                        c = p_scatter + p_fluoro + p_null
+                        total_scatter_prob = (p_scatter + p_fluoro) / dr.maximum(1e-8, c)
                     else:
-                        scatter_prob = dr.mean(mei.sigma_t / mei.combined_extinction)
-                    act_null_scatter = (sampler.next_1d(active_medium) >= scatter_prob) & active_medium
+                        total_scatter_prob = dr.mean(mei.sigma_t / dr.maximum(1e-8, mei.combined_extinction))
+                    act_null_scatter = (sampler.next_1d(active_medium) >= total_scatter_prob) & active_medium
                     act_medium_scatter = ~act_null_scatter & active_medium
-                    weight[act_null_scatter] *= mei.sigma_n / dr.detach(1 - scatter_prob)
+                    weight[act_null_scatter] *= mei.sigma_n / dr.detach(1 - total_scatter_prob)
                 else:
-                    scatter_prob = mi.Float(1.0)
+                    total_scatter_prob = mi.Float(1.0)
                     act_medium_scatter = active_medium
 
                 depth[act_medium_scatter] += 1
@@ -218,23 +214,23 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
                 if medium.has_fluorescence():
                     # Test: mean or max (or something else) for better results?
                     # fluoro_prob = dr.max(mei.sigma_f / (mei.sigma_f + mei.sigma_t))
-                    p_s = dr.mean(throughput * mei.sigma_s)
-                    p_f = dr.mean(throughput * mei.sigma_f)
-                    fluoro_prob = p_f / (p_f + p_s)
+                    p_scatter = dr.mean(throughput * mei.sigma_s)
+                    p_fluoro = dr.mean(throughput * mei.sigma_f)
+                    fluoro_prob = p_fluoro / dr.maximum(1e-8, p_fluoro + p_scatter)
                     act_normal_scatter = (sampler.next_1d(act_medium_scatter) >= fluoro_prob) & act_medium_scatter
                     act_fluoro_scatter = ~act_normal_scatter & act_medium_scatter
                     # TODO Check if this is right
                     weight[act_fluoro_scatter] *= 1.0 / dr.maximum(1e-8, dr.detach(fluoro_prob))
                     weight[act_normal_scatter] *= 1.0 / dr.maximum(1e-8, dr.detach(1.0 - fluoro_prob))
-                    weight[act_fluoro_scatter] *= mei.sigma_f / dr.detach(scatter_prob)
-                    weight[act_normal_scatter] *= mei.sigma_s / dr.detach(scatter_prob)
+                    weight[act_fluoro_scatter] *= mei.sigma_f / dr.detach(total_scatter_prob)
+                    weight[act_normal_scatter] *= mei.sigma_s / dr.detach(total_scatter_prob)
                     # Shift wavelength of ray for fluorescent medium interaction
                     med_fluoro_wavelengths, med_fluoro_weight = medium.sample_wavelength_shift(
                         mei, sampler.next_1d(act_fluoro_scatter), act_fluoro_scatter)
                     mei.wavelengths[act_fluoro_scatter] = med_fluoro_wavelengths
-                    weight[act_fluoro_scatter] *= med_fluoro_weight
+                    weight[act_fluoro_scatter] *=  med_fluoro_weight
                 else:
-                    weight[act_medium_scatter] *= mei.sigma_s / dr.detach(scatter_prob)
+                    weight[act_medium_scatter] *= mei.sigma_s / dr.detach(total_scatter_prob)
                 throughput *= dr.detach(weight)
 
                 mei = dr.detach(mei)
@@ -301,8 +297,8 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
                                                   sampler.next_2d(active_surface),
                                                   active_surface)
                     active_surface &= bs.pdf > 0
-                    is_fluoro_surf = mi.has_flag(
-                        bs.sampled_type, mi.BSDFFlags.FluorescentReflection)
+                    is_fluoro_surf = mi.has_flag(bs.sampled_type,
+                                                 mi.BSDFFlags.FluorescentReflection)
                     shifted_si = mi.SurfaceInteraction3f(si)
                     excite_weight = mi.UnpolarizedSpectrum(1.0)
                     surf_fluoro_wavelengths, surf_fluoro_weight = bsdf.sample_wavelength_shift(
