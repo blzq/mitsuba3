@@ -32,11 +32,11 @@ public:
     get_scattering_coefficients(const MediumInteraction3f &mi,
                                 Mask active = true) const = 0;
     
-    /// Returns the medium coefficients Sigma_s, Sigma_n, Sigma_t and Sigma_f 
+    /// Returns the medium coefficients Sigma_s, Sigma_n, Sigma_t, Sigma_f and Sigma_x
     /// evaluated at a given MediumInteraction mi
     /// Only implemented for fluorescent media, default implementation throws an error
-    virtual std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum,
-                       UnpolarizedSpectrum, UnpolarizedSpectrum>
+    virtual std::tuple<UnpolarizedSpectrum, UnpolarizedSpectrum, UnpolarizedSpectrum,
+                       UnpolarizedSpectrum, Float>
     get_scattering_coefficients_fluoro(const MediumInteraction3f &mi,
                                        Mask active = true) const;
 
@@ -85,10 +85,9 @@ public:
      * \brief Sample wavelength shift for fluorescent scattering
      *
      * For fluorescent (wavelength-shifting) volumes, samples a
-     * random wavelength, associated excitation or fluorescence value, and
-     * associated Monte Carlo importance weight in order to decide the
-     * wavelength and strength of incoming excitation radiation or outgoing
-     * fluorescent radiation.
+     * random wavelength, associated excitation value, and associated
+     * Monte Carlo importance weight in order to decide the wavelength
+     * and strength of incoming excitation radiation.
      *
      * For non-fluorescent volumes, it should return the original wavelength
      * and a weight of 1, which is the default behaviour.

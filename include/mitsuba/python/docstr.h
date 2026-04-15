@@ -5408,6 +5408,8 @@ static const char *__doc_mitsuba_MediumInteraction_sigma_t = R"doc()doc";
 
 static const char *__doc_mitsuba_MediumInteraction_sigma_f = R"doc()doc";
 
+static const char *__doc_mitsuba_MediumInteraction_sigma_x = R"doc()doc";
+
 static const char *__doc_mitsuba_MediumInteraction_to_local =
 R"doc(Convert a world-space vector into local shading coordinates (defined
 by ``wi``))doc";
