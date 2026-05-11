@@ -187,11 +187,13 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
 
                         # alternative based on spectral decomposition paper (path throughput)
                         # https://media.disneyanimation.com/uploads/production/publication_asset/158/asset/SpectralAndDecompositionTracking.pdf
-                        p_scatter = dr.mean(throughput * mei.sigma_s)
+                        p_scatter = dr.mean(throughput * mei.sigma_t)
                         p_fluoro = dr.mean(throughput * mei.sigma_f)
                         p_null = dr.mean(throughput * mei.sigma_n)
                         c = p_scatter + p_fluoro + p_null
-                        total_scatter_prob = (p_scatter + p_fluoro) / dr.maximum(1e-8, c)
+                        # TODO: Why does this give wrong gradients?
+                        # total_scatter_prob = (p_scatter + p_fluoro) / dr.maximum(1e-8, c)
+                        total_scatter_prob = dr.mean((mei.sigma_t + mei.sigma_f) / dr.maximum(1e-8, mei.combined_extinction))
                     else:
                         total_scatter_prob = dr.mean(mei.sigma_t / dr.maximum(1e-8, mei.combined_extinction))
                     act_null_scatter = (sampler.next_1d(active_medium) >= total_scatter_prob) & active_medium
