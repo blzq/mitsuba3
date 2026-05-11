@@ -145,29 +145,41 @@ public:
         m_has_fluorescence = true;
 
         m_albedo = props.get_volume<Volume>("albedo", .3f);
-        // A mono value representing the spatial excitation strength per voxel
-        m_excitation = props.get_volume<Volume>("excitation", .3f);
-        m_sigmaf = props.get_volume<Volume>("fluorescence", .5f);
+        // A mono-channel grid representing the spatial fluorescent excitation strength per voxel
+        // Similar to albedo, the excitation strength is specified as a proportion of total extinction
+        m_excitation = props.get_volume<Volume>("excitation", 0.f);
+        // A mono-channel grid representing the spatial fluorescent emission strength per voxel
+        // The mono value represents the emission strength at the wavelength with highest emission
+        m_sigmaf = props.get_volume<Volume>("fluorescence", 0.f);
         // Absorption + scattering + fluorescent excitation
         m_sigmat = props.get_volume<Volume>("sigma_t", 1.0f);
-        
-        // A (regular or irregular) spectrum representing the relative excitation strength per wavelength
+
+        // A spectrum representing the relative fluorescent excitation strength per wavelength
+        // The spectrum will be normalised to have unit integral during evaluation
         m_excitation_spectrum = props.get_texture<Texture>("excitation_spectrum", .5f);
+        // A spectrum representing the relative fluorescent emission strength per wavelength
+        // The spectrum will be normalised such that the maximum is equal to 1 during evaluation
+        m_fluorescence_spectrum = props.get_texture<Texture>("fluorescence_spectrum", .5f);
+
         m_scale = props.get<ScalarFloat>("scale", 1.0f);
         m_has_spectral_extinction = props.get<bool>("has_spectral_extinction", true);
 
+        // Not optimal because
+        // max(sigma_t) + max(sigma_f) >= max(sigma_t + sigma_f)
+        // Ideally, store a spectral majorant
         m_max_density = dr::opaque<Float>(m_scale * (m_sigmat->max() + m_sigmaf->max()));
 
         m_bbox = ScalarBoundingBox3f().merge(m_sigmat->bbox(), m_sigmaf->bbox());
     }
 
     void traverse(TraversalCallback *cb) override {
-        cb->put("scale",               m_scale,               ParamFlags::NonDifferentiable);
-        cb->put("albedo",              m_albedo,              ParamFlags::Differentiable);
-        cb->put("sigma_t",             m_sigmat,              ParamFlags::Differentiable);
-        cb->put("excitation",          m_excitation,          ParamFlags::Differentiable);
-        cb->put("excitation_spectrum", m_excitation_spectrum, ParamFlags::Differentiable);
-        cb->put("fluorescence",        m_sigmaf,              ParamFlags::Differentiable);
+        cb->put("scale",                 m_scale,                 ParamFlags::NonDifferentiable);
+        cb->put("albedo",                m_albedo,                ParamFlags::Differentiable);
+        cb->put("sigma_t",               m_sigmat,                ParamFlags::Differentiable);
+        cb->put("excitation",            m_excitation,            ParamFlags::Differentiable);
+        cb->put("excitation_spectrum",   m_excitation_spectrum,   ParamFlags::Differentiable);
+        cb->put("fluorescence",          m_sigmaf,                ParamFlags::Differentiable);
+        cb->put("fluorescence_spectrum", m_fluorescence_spectrum, ParamFlags::Differentiable);
         Base::traverse(cb);
     }
 
@@ -188,7 +200,14 @@ public:
         MI_MASKED_FUNCTION(ProfilerPhase::MediumEvaluate, active);
 
         UnpolarizedSpectrum sigmat = m_scale * (m_sigmat->eval(mi, active));
-        UnpolarizedSpectrum sigmaf = m_scale * (m_sigmaf->eval(mi, active));
+
+        SurfaceInteraction3f si = dr::zeros<SurfaceInteraction3f>();
+        si.wavelengths = mi.wavelengths;
+        UnpolarizedSpectrum sigmaf_spectrum =
+            m_fluorescence_spectrum->eval(si, active) /
+            m_fluorescence_spectrum->max();
+        Float sigmaf_strength      = m_scale * m_sigmaf->eval_1(mi, active);
+        UnpolarizedSpectrum sigmaf = sigmaf_spectrum * sigmaf_strength;
         if (has_flag(m_phase_function->flags(), PhaseFunctionFlags::Microflake)) {
             sigmat *= m_phase_function->projected_area(mi, active);
             sigmaf *= m_phase_function->projected_area(mi, active);
@@ -197,7 +216,7 @@ public:
         // Only the portion of sigman that represents null scattering
         UnpolarizedSpectrum sigman_null = m_max_density - sigmat - sigmaf;
         UnpolarizedSpectrum sigmas = sigmat * m_albedo->eval(mi, active);
-    
+
         return { sigmas, sigman_null, sigmat };
     }
 
@@ -207,18 +226,31 @@ public:
                                        Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::MediumEvaluate, active);
 
-        UnpolarizedSpectrum sigmat = m_scale * (m_sigmat->eval(mi, active));
-        UnpolarizedSpectrum sigmaf = m_scale * (m_sigmaf->eval(mi, active));
+        UnpolarizedSpectrum sigmat = m_scale * m_sigmat->eval(mi, active);
+
+        SurfaceInteraction3f si = dr::zeros<SurfaceInteraction3f>();
+        si.wavelengths = mi.wavelengths;
+        UnpolarizedSpectrum sigmaf_spectrum =
+            m_fluorescence_spectrum->eval(si, active) /
+            m_fluorescence_spectrum->max();
+        Float sigmaf_strength      = m_scale * m_sigmaf->eval_1(mi, active);
+        UnpolarizedSpectrum sigmaf = sigmaf_spectrum * sigmaf_strength;
+
         if (has_flag(m_phase_function->flags(), PhaseFunctionFlags::Microflake)) {
             sigmat *= m_phase_function->projected_area(mi, active);
             sigmaf *= m_phase_function->projected_area(mi, active);
         }
 
         // Only the portion of sigman that represents null scattering
-        UnpolarizedSpectrum sigman_null = m_max_density - sigmat - sigmaf;
+        // TODO: -sigmaf here causes gradient problems?
+        // TODO: experiments with separating sigmas and sigmat here
         UnpolarizedSpectrum sigmas = sigmat * m_albedo->eval(mi, active);
+        UnpolarizedSpectrum sigman_null =
+            // m_max_density - (sigmat - sigmas) - dr::detach(sigmas + sigmaf);
+            // m_max_density - dr::detach(sigmat) - sigmaf;
+            m_max_density - sigmat - sigmaf;
         Float sigmax = m_excitation->eval_1(mi, active);
-    
+
         return { sigmas, sigman_null, sigmat, sigmaf, sigmax };
     }
 
@@ -270,17 +302,17 @@ public:
                             Float sample, Mask active) const override {
         // Only support paths from camera to light (TransportMode::Radiance)
 
-        // Position of mi is unused since excitation spectrum is assumed to be 
+        // Position of mi is unused since excitation spectrum is assumed to be
         // the same (but scaled) throughout the medium
         SurfaceInteraction3f si = dr::zeros<SurfaceInteraction3f>();
-        
+
         auto [wavelengths, weight] = m_excitation_spectrum->sample_spectrum(
             si, math::sample_shifted<Wavelength>(sample), active);
         // The absolute values of the spectrum are not used, only the shape
         // (i.e. force the spectrum to have unit integral)
         weight /= m_excitation_spectrum->sum(si, active);
 
-        // Evaluate sigma_t at the interaction point for the post-shift wavelengths 
+        // Evaluate sigma_t at the interaction point for the post-shift wavelengths
         // TODO move this to sample_interaction() for efficiency?
         MediumInteraction3f shifted_mi(mi);
         shifted_mi.wavelengths = wavelengths;
@@ -312,13 +344,15 @@ public:
     MI_DECLARE_CLASS(HeterogeneousFluoroMedium)
 private:
     ref<Volume> m_albedo, m_excitation, m_sigmat, m_sigmaf;
-    ref<Texture> m_excitation_spectrum;
+    ref<Texture> m_excitation_spectrum, m_fluorescence_spectrum;
     ScalarFloat m_scale;
     Float m_max_density;
 
     ScalarBoundingBox3f m_bbox;
 
-    MI_TRAVERSE_CB(Base, m_sigmat, m_albedo, m_excitation, m_sigmaf, m_max_density)
+    MI_TRAVERSE_CB(Base, m_albedo, m_excitation, m_sigmat, m_sigmaf, 
+                   m_excitation_spectrum, m_fluorescence_spectrum, 
+                   m_max_density)
 };
 
 MI_EXPORT_PLUGIN(HeterogeneousFluoroMedium)
