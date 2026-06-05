@@ -187,18 +187,20 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
 
                         # alternative based on spectral decomposition paper (path throughput)
                         # https://media.disneyanimation.com/uploads/production/publication_asset/158/asset/SpectralAndDecompositionTracking.pdf
-                        p_scatter = dr.mean(throughput * mei.sigma_t)
-                        p_fluoro = dr.mean(throughput * mei.sigma_f)
-                        p_null = dr.mean(throughput * mei.sigma_n)
-                        c = p_scatter + p_fluoro + p_null
-                        # TODO: Why does this give wrong gradients?
+                        # p_scatter = dr.mean(throughput * mei.sigma_t)
+                        # p_fluoro = dr.mean(throughput * mei.sigma_f)
+                        # p_null = dr.mean(throughput * mei.sigma_n)
+                        # c = p_scatter + p_fluoro + p_null
+                        # using this breaks sigma_t optimisation without detaching sigma_n
                         # total_scatter_prob = (p_scatter + p_fluoro) / dr.maximum(1e-8, c)
                         total_scatter_prob = dr.mean((mei.sigma_t + mei.sigma_f) / dr.maximum(1e-8, mei.combined_extinction))
                     else:
                         total_scatter_prob = dr.mean(mei.sigma_t / dr.maximum(1e-8, mei.combined_extinction))
                     act_null_scatter = (sampler.next_1d(active_medium) >= total_scatter_prob) & active_medium
                     act_medium_scatter = ~act_null_scatter & active_medium
-                    weight[act_null_scatter] *= mei.sigma_n / dr.detach(1 - total_scatter_prob)
+                    # not detaching here causes inverted gradients for sigma_f optimisation
+                    # weight[act_null_scatter] *= mei.sigma_n / dr.detach(1 - total_scatter_prob)
+                    weight[act_null_scatter] *= dr.detach(mei.sigma_n) / dr.detach(1 - total_scatter_prob)
                 else:
                     total_scatter_prob = mi.Float(1.0)
                     act_medium_scatter = active_medium
@@ -216,9 +218,11 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
                 if medium.has_fluorescence():
                     # Test: mean or max (or something else) for better results?
                     # fluoro_prob = dr.max(mei.sigma_f / (mei.sigma_f + mei.sigma_t))
-                    p_scatter = dr.mean(throughput * mei.sigma_s)
-                    p_fluoro = dr.mean(throughput * mei.sigma_f)
-                    fluoro_prob = p_fluoro / dr.maximum(1e-8, p_fluoro + p_scatter)
+                    # p_scatter = dr.mean(dr.detach(throughput) * mei.sigma_s)
+                    # p_fluoro = dr.mean(dr.detach(throughput) * mei.sigma_f)
+                    p_scatter = dr.mean(mei.sigma_s)
+                    p_fluoro = dr.mean(mei.sigma_f)
+                    fluoro_prob = p_fluoro / dr.detach(dr.maximum(1e-8, p_fluoro + p_scatter))
                     act_normal_scatter = (sampler.next_1d(act_medium_scatter) >= fluoro_prob) & act_medium_scatter
                     act_fluoro_scatter = ~act_normal_scatter & act_medium_scatter
                     # TODO Check if this is right
