@@ -234,7 +234,7 @@ class PRBVolpathFluoroIntegrator(RBIntegrator):
                     med_fluoro_wavelengths, med_fluoro_weight = medium.sample_wavelength_shift(
                         mei, sampler.next_1d(act_fluoro_scatter), act_fluoro_scatter)
                     mei.wavelengths[act_fluoro_scatter] = med_fluoro_wavelengths
-                    weight[act_fluoro_scatter] *=  med_fluoro_weight
+                    weight[act_fluoro_scatter] *= med_fluoro_weight
                 else:
                     weight[act_medium_scatter] *= mei.sigma_s / dr.detach(total_scatter_prob)
                 throughput *= dr.detach(weight)
