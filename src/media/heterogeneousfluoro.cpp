@@ -242,13 +242,8 @@ public:
         }
 
         // Only the portion of sigman that represents null scattering
-        // TODO: -sigmaf here causes gradient problems?
-        // TODO: experiments with separating sigmas and sigmat here
         UnpolarizedSpectrum sigmas = sigmat * m_albedo->eval(mi, active);
-        UnpolarizedSpectrum sigman_null =
-            // m_max_density - (sigmat - sigmas) - dr::detach(sigmas + sigmaf);
-            // m_max_density - dr::detach(sigmat) - sigmaf;
-            m_max_density - sigmat - sigmaf;
+        UnpolarizedSpectrum sigman_null = m_max_density - sigmat - sigmaf;
         Float sigmax = m_excitation->eval_1(mi, active);
 
         return { sigmas, sigman_null, sigmat, sigmaf, sigmax };
